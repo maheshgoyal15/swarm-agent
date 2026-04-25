@@ -1,0 +1,209 @@
+@import "tailwindcss";
+
+/* ============== DESIGN TOKENS ============== */
+:root {
+  /* Base palette — sophisticated terminal */
+  --bg: #0a0e16;
+  --bg-elev: #0f1420;
+  --surface: #131927;
+  --surface-2: #1a2233;
+  --border: rgba(255, 255, 255, 0.06);
+  --border-strong: rgba(255, 255, 255, 0.12);
+
+  /* Text */
+  --text: #e6e9f0;
+  --text-muted: #8a93a6;
+  --text-dim: #5a6478;
+
+  /* Signature accent — CRT phosphor green */
+  --accent: #7df9a9;
+  --accent-dim: #4ac788;
+  --accent-glow: rgba(125, 249, 169, 0.15);
+
+  /* Status */
+  --warn: #fbbf24;
+  --warn-dim: rgba(251, 191, 36, 0.12);
+  --critical: #ef5a6f;
+  --critical-dim: rgba(239, 90, 111, 0.12);
+  --info: #6ea8ff;
+  --info-dim: rgba(110, 168, 255, 0.12);
+
+  /* Typography */
+  --font-display: var(--font-instrument-serif), Georgia, serif;
+  --font-body: var(--font-manrope), system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, monospace;
+}
+
+/* ============== BASE ============== */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  font-family: var(--font-body);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+  background-image: radial-gradient(
+      ellipse 80% 50% at 50% -20%,
+      rgba(125, 249, 169, 0.06),
+      transparent 70%
+    ),
+    radial-gradient(
+      ellipse 60% 40% at 90% 10%,
+      rgba(110, 168, 255, 0.04),
+      transparent 70%
+    );
+  background-attachment: fixed;
+}
+
+/* Subtle grid texture */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background-image: linear-gradient(
+      rgba(255, 255, 255, 0.015) 1px,
+      transparent 1px
+    ),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.015) 1px, transparent 1px);
+  background-size: 32px 32px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ============== ANIMATIONS ============== */
+@keyframes pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.3;
+  }
+  50% {
+    transform: scale(1.08);
+    opacity: 0;
+  }
+}
+
+@keyframes blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideInUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes cardPulse {
+  0% {
+    box-shadow: 0 0 0 0 var(--accent-glow);
+  }
+  50% {
+    box-shadow: 0 0 20px 4px var(--accent-glow);
+  }
+  100% {
+    box-shadow: 0 0 0 0 var(--accent-glow);
+  }
+}
+
+@keyframes scanning {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes typingDot {
+  0%,
+  60%,
+  100% {
+    opacity: 0.3;
+    transform: scale(0.8);
+  }
+  30% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* ============== STAGGER ENTRY ============== */
+.stagger-1 { animation: fadeInUp 0.5s ease-out 0.1s both; }
+.stagger-2 { animation: fadeInUp 0.5s ease-out 0.2s both; }
+.stagger-3 { animation: fadeInUp 0.5s ease-out 0.3s both; }
+.stagger-4 { animation: fadeInUp 0.5s ease-out 0.4s both; }
+.stagger-5 { animation: fadeInUp 0.5s ease-out 0.5s both; }
+.stagger-6 { animation: fadeInUp 0.5s ease-out 0.6s both; }
+.stagger-7 { animation: fadeInUp 0.5s ease-out 0.7s both; }
+
+/* ============== FOCUS RINGS ============== */
+*:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ============== REDUCED MOTION ============== */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  /* Keep agent pulse since it conveys real status */
+  .agent-pulse {
+    animation: blink 1.5s ease-in-out infinite !important;
+  }
+}
+
+/* ============== SCROLLBAR ============== */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-dim);
+}

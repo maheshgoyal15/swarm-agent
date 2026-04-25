@@ -1,0 +1,1294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>EvoAgent · Autonomous Database Optimization</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;600&family=Manrope:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  /* ============== DESIGN TOKENS ============== */
+  :root {
+    /* Base palette — sophisticated terminal */
+    --bg: #0a0e16;
+    --bg-elev: #0f1420;
+    --surface: #131927;
+    --surface-2: #1a2233;
+    --border: rgba(255,255,255,0.06);
+    --border-strong: rgba(255,255,255,0.12);
+
+    /* Text */
+    --text: #e6e9f0;
+    --text-muted: #8a93a6;
+    --text-dim: #5a6478;
+
+    /* Signature accent — CRT phosphor green */
+    --accent: #7df9a9;
+    --accent-dim: #4ac788;
+    --accent-glow: rgba(125, 249, 169, 0.15);
+
+    /* Status */
+    --warn: #fbbf24;
+    --warn-dim: rgba(251, 191, 36, 0.12);
+    --critical: #ef5a6f;
+    --critical-dim: rgba(239, 90, 111, 0.12);
+    --info: #6ea8ff;
+    --info-dim: rgba(110, 168, 255, 0.12);
+
+    /* Typography */
+    --font-display: 'Instrument Serif', Georgia, serif;
+    --font-body: 'Manrope', system-ui, sans-serif;
+    --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+
+  body {
+    font-family: var(--font-body);
+    background: var(--bg);
+    color: var(--text);
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+    background-image:
+      radial-gradient(ellipse 80% 50% at 50% -20%, rgba(125,249,169,0.06), transparent 70%),
+      radial-gradient(ellipse 60% 40% at 90% 10%, rgba(110,168,255,0.04), transparent 70%);
+    background-attachment: fixed;
+  }
+
+  /* Subtle grid texture */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.015) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.015) 1px, transparent 1px);
+    background-size: 32px 32px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .app { position: relative; z-index: 1; min-height: 100vh; display: grid; grid-template-rows: auto 1fr; }
+
+  /* ============== HEADER ============== */
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 32px;
+    border-bottom: 1px solid var(--border);
+    background: rgba(10,14,22,0.7);
+    backdrop-filter: blur(20px);
+    position: sticky; top: 0; z-index: 100;
+  }
+  .brand { display: flex; align-items: center; gap: 12px; }
+  .brand-mark {
+    width: 32px; height: 32px;
+    border-radius: 8px;
+    background: linear-gradient(135deg, var(--accent) 0%, #4d8c6b 100%);
+    display: grid; place-items: center;
+    font-family: var(--font-mono);
+    font-weight: 600; font-size: 14px;
+    color: var(--bg);
+    box-shadow: 0 0 20px var(--accent-glow);
+    position: relative;
+  }
+  .brand-mark::after {
+    content: ''; position: absolute; inset: -2px;
+    border-radius: 10px;
+    border: 1px solid var(--accent);
+    opacity: 0.3;
+    animation: pulse 2.5s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { transform: scale(1); opacity: 0.3; }
+    50% { transform: scale(1.08); opacity: 0; }
+  }
+  .brand-name {
+    font-family: var(--font-display);
+    font-size: 22px;
+    letter-spacing: -0.01em;
+  }
+  .brand-name em { color: var(--accent); font-style: italic; }
+  .brand-tag {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    padding-left: 12px;
+    margin-left: 12px;
+    border-left: 1px solid var(--border);
+  }
+
+  .nav { display: flex; gap: 4px; }
+  .nav-item {
+    padding: 8px 14px;
+    color: var(--text-muted);
+    font-size: 13px;
+    font-weight: 500;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.15s;
+    text-decoration: none;
+  }
+  .nav-item:hover { color: var(--text); background: var(--surface); }
+  .nav-item.active { color: var(--accent); background: var(--accent-glow); }
+
+  .topbar-actions { display: flex; align-items: center; gap: 12px; }
+  .search {
+    display: flex; align-items: center; gap: 8px;
+    padding: 7px 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    width: 280px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+  .search kbd {
+    margin-left: auto;
+    padding: 2px 6px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    font-size: 10px;
+    color: var(--text-dim);
+  }
+  .status-pill {
+    display: flex; align-items: center; gap: 6px;
+    padding: 6px 10px;
+    background: var(--accent-glow);
+    border: 1px solid rgba(125,249,169,0.25);
+    border-radius: 100px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--accent);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .status-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 8px var(--accent);
+    animation: blink 1.8s ease-in-out infinite;
+  }
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+  .avatar {
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #6ea8ff, #b794f6);
+    display: grid; place-items: center;
+    font-weight: 600; font-size: 12px;
+    color: white;
+  }
+
+  /* ============== MAIN ============== */
+  .main {
+    display: grid;
+    grid-template-columns: 1fr 360px;
+    gap: 24px;
+    padding: 32px;
+    max-width: 1640px;
+    margin: 0 auto;
+    width: 100%;
+  }
+
+  /* ============== HERO HEADER SECTION ============== */
+  .hero {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    margin-bottom: 8px;
+  }
+  .hero-title {
+    font-family: var(--font-display);
+    font-size: 56px;
+    line-height: 1;
+    letter-spacing: -0.02em;
+    font-weight: 400;
+  }
+  .hero-title em {
+    font-style: italic;
+    color: var(--accent);
+  }
+  .hero-sub {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-top: 12px;
+  }
+  .hero-meta {
+    text-align: right;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-dim);
+    line-height: 1.8;
+  }
+  .hero-meta strong { color: var(--text); font-weight: 500; }
+
+  /* ============== STATS ROW ============== */
+  .stats-row {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: 1.4fr 1fr 1fr 1fr;
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .stat {
+    background: var(--bg-elev);
+    padding: 24px 28px;
+    position: relative;
+    overflow: hidden;
+  }
+  .stat-label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .stat-value {
+    font-family: var(--font-display);
+    font-size: 44px;
+    line-height: 1;
+    letter-spacing: -0.02em;
+    margin-bottom: 8px;
+  }
+  .stat-value .unit {
+    font-size: 18px;
+    color: var(--text-muted);
+    margin-left: 4px;
+  }
+  .stat-trend {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--accent);
+  }
+  .stat-trend.down { color: var(--critical); }
+
+  /* Optimization score special styling */
+  .stat.feature {
+    background: linear-gradient(135deg, var(--bg-elev) 0%, rgba(125,249,169,0.04) 100%);
+  }
+  .gauge-row { display: flex; align-items: center; gap: 24px; }
+  .gauge {
+    width: 110px; height: 110px;
+    flex-shrink: 0;
+    position: relative;
+  }
+  .gauge svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+  .gauge-track { fill: none; stroke: var(--border-strong); stroke-width: 8; }
+  .gauge-fill {
+    fill: none;
+    stroke: url(#gaugeGradient);
+    stroke-width: 8;
+    stroke-linecap: round;
+    stroke-dasharray: 314;
+    stroke-dashoffset: 47;
+    filter: drop-shadow(0 0 6px var(--accent-glow));
+  }
+  .gauge-center {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    flex-direction: column;
+  }
+  .gauge-num {
+    font-family: var(--font-display);
+    font-size: 36px;
+    line-height: 1;
+    color: var(--accent);
+  }
+  .gauge-letter {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    margin-top: 2px;
+  }
+
+  /* ============== CARDS ============== */
+  .card {
+    background: var(--bg-elev);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 18px 24px;
+    border-bottom: 1px solid var(--border);
+  }
+  .card-title {
+    display: flex; align-items: center; gap: 10px;
+    font-family: var(--font-display);
+    font-size: 22px;
+    letter-spacing: -0.01em;
+  }
+  .card-title-mono {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+  .badge {
+    padding: 3px 8px;
+    background: var(--accent-glow);
+    color: var(--accent);
+    border-radius: 4px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 500;
+  }
+
+  /* ============== RECOMMENDATIONS FEED ============== */
+  .left-col { display: flex; flex-direction: column; gap: 24px; }
+
+  .recs { display: flex; flex-direction: column; }
+  .rec {
+    padding: 22px 24px;
+    border-bottom: 1px solid var(--border);
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 18px;
+    align-items: start;
+    transition: background 0.15s;
+    cursor: pointer;
+  }
+  .rec:last-child { border-bottom: none; }
+  .rec:hover { background: var(--surface); }
+
+  .rec-icon {
+    width: 40px; height: 40px;
+    border-radius: 8px;
+    display: grid; place-items: center;
+    font-family: var(--font-mono);
+    font-weight: 600;
+    font-size: 14px;
+    flex-shrink: 0;
+  }
+  .rec-icon.cost { background: var(--accent-glow); color: var(--accent); }
+  .rec-icon.perf { background: var(--info-dim); color: var(--info); }
+  .rec-icon.warn { background: var(--warn-dim); color: var(--warn); }
+
+  .rec-content { min-width: 0; }
+  .rec-meta {
+    display: flex; align-items: center; gap: 10px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 6px;
+  }
+  .rec-meta .dot { width: 3px; height: 3px; border-radius: 50%; background: var(--text-dim); }
+  .rec-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 6px;
+    line-height: 1.35;
+  }
+  .rec-target {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--accent);
+    background: rgba(125,249,169,0.06);
+    padding: 2px 6px;
+    border-radius: 3px;
+    display: inline-block;
+    margin-bottom: 10px;
+  }
+  .rec-desc {
+    font-size: 13px;
+    color: var(--text-muted);
+    line-height: 1.55;
+    margin-bottom: 12px;
+  }
+  .rec-impact {
+    display: flex; gap: 20px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+  }
+  .rec-impact span { color: var(--text-dim); }
+  .rec-impact strong { color: var(--accent); font-weight: 500; }
+  .rec-impact .neg { color: var(--critical); }
+
+  .rec-actions {
+    display: flex; flex-direction: column; gap: 6px;
+    align-items: flex-end;
+  }
+  .btn {
+    padding: 7px 14px;
+    border-radius: 6px;
+    font-family: var(--font-body);
+    font-size: 12px;
+    font-weight: 500;
+    border: 1px solid var(--border-strong);
+    background: var(--surface);
+    color: var(--text);
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .btn:hover { background: var(--surface-2); border-color: var(--text-dim); }
+  .btn-primary {
+    background: var(--accent);
+    color: var(--bg);
+    border-color: var(--accent);
+    font-weight: 600;
+  }
+  .btn-primary:hover { background: var(--accent-dim); border-color: var(--accent-dim); }
+  .btn-ghost { background: transparent; border-color: transparent; color: var(--text-muted); }
+  .btn-ghost:hover { color: var(--text); background: var(--surface); }
+
+  /* ============== AGENT SWARM PANEL ============== */
+  .swarm {
+    padding: 0 0 8px;
+  }
+  .swarm-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    padding: 18px 24px;
+    gap: 12px;
+  }
+  .agent {
+    padding: 14px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    position: relative;
+    overflow: hidden;
+  }
+  .agent.active::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: var(--accent);
+    box-shadow: 0 0 8px var(--accent);
+  }
+  .agent.idle::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: var(--text-dim);
+  }
+  .agent-name {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 8px;
+  }
+  .agent-role {
+    font-family: var(--font-display);
+    font-size: 18px;
+    line-height: 1.1;
+    margin-bottom: 10px;
+  }
+  .agent-status {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--accent);
+    display: flex; align-items: center; gap: 6px;
+  }
+  .agent.idle .agent-status { color: var(--text-dim); }
+  .agent-status .pulse {
+    width: 4px; height: 4px; border-radius: 50%;
+    background: currentColor;
+    animation: blink 1.5s ease-in-out infinite;
+  }
+  .agent-task {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 8px;
+    line-height: 1.4;
+    min-height: 30px;
+  }
+
+  /* ============== IMPACT CHART ============== */
+  .chart-wrap { padding: 24px; }
+  .chart-legend {
+    display: flex; gap: 20px; margin-bottom: 20px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+  .chart-legend .key {
+    display: inline-block;
+    width: 10px; height: 10px;
+    border-radius: 2px;
+    margin-right: 8px;
+    vertical-align: middle;
+  }
+  .chart {
+    width: 100%;
+    height: 200px;
+  }
+
+  /* ============== RIGHT COLUMN ============== */
+  .right-col { display: flex; flex-direction: column; gap: 24px; }
+
+  /* AI Chat */
+  .chat {
+    display: flex; flex-direction: column;
+    height: 540px;
+  }
+  .chat-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .msg { display: flex; gap: 10px; }
+  .msg-avatar {
+    width: 26px; height: 26px;
+    border-radius: 6px;
+    flex-shrink: 0;
+    display: grid; place-items: center;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 600;
+  }
+  .msg-avatar.user {
+    background: linear-gradient(135deg, #6ea8ff, #b794f6);
+    color: white;
+  }
+  .msg-avatar.ai {
+    background: var(--accent);
+    color: var(--bg);
+  }
+  .msg-bubble {
+    flex: 1;
+    font-size: 13px;
+    line-height: 1.55;
+    color: var(--text);
+  }
+  .msg-bubble code {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    background: var(--surface);
+    padding: 1px 5px;
+    border-radius: 3px;
+    color: var(--accent);
+  }
+  .msg-bubble.ai-msg .reasoning {
+    margin-top: 8px;
+    padding: 10px 12px;
+    background: var(--surface);
+    border-left: 2px solid var(--accent);
+    border-radius: 0 6px 6px 0;
+    font-size: 12px;
+    color: var(--text-muted);
+    font-style: italic;
+  }
+  .chat-input {
+    border-top: 1px solid var(--border);
+    padding: 14px 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--surface);
+  }
+  .chat-input input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--text);
+    font-family: var(--font-body);
+    font-size: 13px;
+    padding: 4px;
+  }
+  .chat-input input::placeholder { color: var(--text-dim); }
+  .chat-send {
+    width: 28px; height: 28px;
+    border-radius: 6px;
+    background: var(--accent);
+    border: none;
+    cursor: pointer;
+    display: grid; place-items: center;
+    color: var(--bg);
+  }
+
+  /* Knowledge graph mini */
+  .graph-stats {
+    padding: 20px 24px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+  .graph-stat-label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 6px;
+  }
+  .graph-stat-val {
+    font-family: var(--font-display);
+    font-size: 26px;
+    line-height: 1;
+  }
+
+  /* Activity timeline */
+  .activity { padding: 4px 0 12px; }
+  .activity-item {
+    display: grid;
+    grid-template-columns: 60px 12px 1fr;
+    gap: 12px;
+    padding: 10px 24px;
+    align-items: start;
+    position: relative;
+  }
+  .activity-time {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-dim);
+    padding-top: 2px;
+    text-align: right;
+  }
+  .activity-marker {
+    position: relative;
+    height: 100%;
+    display: flex;
+    justify-content: center;
+  }
+  .activity-marker::before {
+    content: '';
+    position: absolute;
+    top: 0; bottom: 0;
+    width: 1px;
+    background: var(--border);
+  }
+  .activity-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--accent);
+    margin-top: 4px;
+    z-index: 1;
+    box-shadow: 0 0 0 3px var(--bg-elev);
+  }
+  .activity-dot.warn { background: var(--warn); }
+  .activity-dot.info { background: var(--info); }
+  .activity-content {
+    font-size: 12px;
+    color: var(--text);
+    line-height: 1.5;
+    padding-bottom: 4px;
+  }
+  .activity-content em {
+    font-style: normal;
+    color: var(--accent);
+    font-family: var(--font-mono);
+    font-size: 11px;
+  }
+  .activity-content .agent-tag {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-right: 8px;
+  }
+
+  /* SQL preview block */
+  .sql-block {
+    margin-top: 8px;
+    padding: 10px 12px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-muted);
+    line-height: 1.5;
+    overflow-x: auto;
+  }
+  .sql-block .kw { color: var(--accent); }
+  .sql-block .str { color: var(--warn); }
+  .sql-block .com { color: var(--text-dim); font-style: italic; }
+
+  /* Severity tags */
+  .tag {
+    display: inline-block;
+    padding: 2px 7px;
+    border-radius: 3px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-weight: 500;
+  }
+  .tag.high { background: var(--critical-dim); color: var(--critical); }
+  .tag.med { background: var(--warn-dim); color: var(--warn); }
+  .tag.low { background: var(--info-dim); color: var(--info); }
+
+  /* Footer note */
+  .footer {
+    grid-column: 1 / -1;
+    padding: 16px 0;
+    text-align: center;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    border-top: 1px solid var(--border);
+    margin-top: 16px;
+  }
+
+  /* Responsive */
+  @media (max-width: 1280px) {
+    .main { grid-template-columns: 1fr; }
+    .swarm-grid { grid-template-columns: repeat(3, 1fr); }
+    .stats-row { grid-template-columns: 1fr 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <linearGradient id="gaugeGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#4ac788"/>
+      <stop offset="100%" stop-color="#7df9a9"/>
+    </linearGradient>
+    <linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#7df9a9" stop-opacity="0.3"/>
+      <stop offset="100%" stop-color="#7df9a9" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="chartGrad2" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#6ea8ff" stop-opacity="0.2"/>
+      <stop offset="100%" stop-color="#6ea8ff" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+</svg>
+
+<div class="app">
+
+  <!-- ===== TOP BAR ===== -->
+  <header class="topbar">
+    <div style="display:flex; align-items:center;">
+      <div class="brand">
+        <div class="brand-mark">E</div>
+        <div>
+          <div class="brand-name">Evo<em>Agent</em></div>
+        </div>
+        <div class="brand-tag">v2.4 · prod</div>
+      </div>
+    </div>
+
+    <nav class="nav">
+      <a class="nav-item active">Overview</a>
+      <a class="nav-item">Recommendations</a>
+      <a class="nav-item">Agents</a>
+      <a class="nav-item">Knowledge</a>
+      <a class="nav-item">Audit</a>
+      <a class="nav-item">Settings</a>
+    </nav>
+
+    <div class="topbar-actions">
+      <div class="search">
+        <span style="opacity:0.5">⌕</span>
+        <span>Search tables, queries, decisions…</span>
+        <kbd>⌘K</kbd>
+      </div>
+      <div class="status-pill">
+        <span class="status-dot"></span>
+        Swarm Active · 5 agents
+      </div>
+      <div class="avatar">RK</div>
+    </div>
+  </header>
+
+  <!-- ===== MAIN ===== -->
+  <main class="main">
+
+    <!-- ===== HERO ===== -->
+    <section class="hero">
+      <div>
+        <h1 class="hero-title">Your data estate, <em>self-tuning.</em></h1>
+        <div class="hero-sub">Coordinator · Cycle #1,247 · Started 04:00 UTC</div>
+      </div>
+      <div class="hero-meta">
+        <div>WORKLOAD · <strong>analytics-prod</strong></div>
+        <div>REGION · <strong>us-central1</strong></div>
+        <div>DATABASES · <strong>BigQuery, AlloyDB, Spanner</strong></div>
+      </div>
+    </section>
+
+    <!-- ===== STATS ===== -->
+    <section class="stats-row">
+      <div class="stat feature">
+        <div class="stat-label">
+          <span style="width:6px;height:6px;border-radius:50%;background:var(--accent);"></span>
+          Optimization Score
+        </div>
+        <div class="gauge-row">
+          <div class="gauge">
+            <svg viewBox="0 0 120 120">
+              <circle class="gauge-track" cx="60" cy="60" r="50"/>
+              <circle class="gauge-fill" cx="60" cy="60" r="50"/>
+            </svg>
+            <div class="gauge-center">
+              <div>
+                <div class="gauge-num">85</div>
+                <div class="gauge-letter">B+ · Healthy</div>
+              </div>
+            </div>
+          </div>
+          <div>
+            <div style="font-size:13px; color:var(--text-muted); line-height:1.5; margin-bottom:8px;">
+              17 optimizations applied this month. Score up from 71.
+            </div>
+            <div class="stat-trend">↑ +14 pts · 30d</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="stat">
+        <div class="stat-label">Cost Saved · MTD</div>
+        <div class="stat-value">$28.4<span class="unit">K</span></div>
+        <div class="stat-trend">↑ 32% vs last month</div>
+      </div>
+
+      <div class="stat">
+        <div class="stat-label">Avg Query Speedup</div>
+        <div class="stat-value">3.7<span class="unit">×</span></div>
+        <div class="stat-trend">↑ 0.4× this week</div>
+      </div>
+
+      <div class="stat">
+        <div class="stat-label">Pending Review</div>
+        <div class="stat-value">8</div>
+        <div class="stat-trend" style="color:var(--warn);">3 high priority</div>
+      </div>
+    </section>
+
+    <!-- ===== LEFT COLUMN ===== -->
+    <div class="left-col">
+
+      <!-- AGENT SWARM -->
+      <section class="card swarm">
+        <div class="card-header">
+          <div class="card-title">
+            <span>The Swarm</span>
+            <span class="card-title-mono">· 5 agents · A2A protocol</span>
+          </div>
+          <button class="btn btn-ghost">View graph →</button>
+        </div>
+        <div class="swarm-grid">
+          <div class="agent active">
+            <div class="agent-name">// 01 — Analyzer</div>
+            <div class="agent-role">Sage</div>
+            <div class="agent-status"><span class="pulse"></span>analyzing</div>
+            <div class="agent-task">Embedding 14k query patterns from JOBS_TIMELINE</div>
+          </div>
+          <div class="agent active">
+            <div class="agent-name">// 02 — Optimizer</div>
+            <div class="agent-role">Forge</div>
+            <div class="agent-status"><span class="pulse"></span>planning</div>
+            <div class="agent-task">Ranking 23 candidate index strategies</div>
+          </div>
+          <div class="agent active">
+            <div class="agent-name">// 03 — Simulator</div>
+            <div class="agent-role">Echo</div>
+            <div class="agent-status"><span class="pulse"></span>dry-run</div>
+            <div class="agent-task">Replaying 50 queries on shadow clone</div>
+          </div>
+          <div class="agent idle">
+            <div class="agent-name">// 04 — Applier</div>
+            <div class="agent-role">Wright</div>
+            <div class="agent-status"><span class="pulse"></span>awaiting approval</div>
+            <div class="agent-task">2 DDL statements queued</div>
+          </div>
+          <div class="agent active">
+            <div class="agent-name">// 05 — Historian</div>
+            <div class="agent-role">Codex</div>
+            <div class="agent-status"><span class="pulse"></span>indexing</div>
+            <div class="agent-task">Writing decision lineage to graph</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- RECOMMENDATIONS -->
+      <section class="card">
+        <div class="card-header">
+          <div class="card-title">
+            <span>Pending Recommendations</span>
+            <span class="badge">8 new</span>
+          </div>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-ghost">Filter</button>
+            <button class="btn btn-ghost">Sort: Impact ↓</button>
+          </div>
+        </div>
+
+        <div class="recs">
+
+          <!-- REC 1 -->
+          <article class="rec">
+            <div class="rec-icon cost">$</div>
+            <div class="rec-content">
+              <div class="rec-meta">
+                <span>BigQuery</span><span class="dot"></span>
+                <span>Partitioning</span><span class="dot"></span>
+                <span>Sage + Forge</span><span class="dot"></span>
+                <span class="tag high">High Impact</span>
+              </div>
+              <div class="rec-title">Repartition <code style="font-family:var(--font-mono);">events_raw</code> by <code style="font-family:var(--font-mono);">DATE(event_ts)</code> + cluster on <code style="font-family:var(--font-mono);">user_id</code></div>
+              <div class="rec-target">analytics-prod.warehouse.events_raw · 4.2 TB · 3.1B rows</div>
+              <div class="rec-desc">
+                94% of queries on this table filter by event_ts in a ≤30-day window, but the table is currently unpartitioned. Adding daily partitioning + clustering should cut average bytes-scanned by an estimated 87%.
+              </div>
+              <div class="sql-block">
+<span class="com">-- Generated by Forge · simulated by Echo</span>
+<span class="kw">CREATE OR REPLACE TABLE</span> warehouse.events_raw
+<span class="kw">PARTITION BY</span> <span class="kw">DATE</span>(event_ts)
+<span class="kw">CLUSTER BY</span> user_id, event_type
+<span class="kw">AS SELECT</span> * <span class="kw">FROM</span> warehouse.events_raw;
+              </div>
+              <div class="rec-impact" style="margin-top:12px;">
+                <span>Bytes scanned: <strong>−87%</strong></span>
+                <span>Est. monthly savings: <strong>$12.4K</strong></span>
+                <span>Avg query: <strong>4.2× faster</strong></span>
+                <span>Risk: <strong style="color:var(--warn);">medium</strong></span>
+              </div>
+            </div>
+            <div class="rec-actions">
+              <button class="btn btn-primary">Apply</button>
+              <button class="btn">Simulate</button>
+              <button class="btn btn-ghost">Reject</button>
+            </div>
+          </article>
+
+          <!-- REC 2 -->
+          <article class="rec">
+            <div class="rec-icon perf">⚡</div>
+            <div class="rec-content">
+              <div class="rec-meta">
+                <span>AlloyDB</span><span class="dot"></span>
+                <span>Index</span><span class="dot"></span>
+                <span>Forge</span><span class="dot"></span>
+                <span class="tag med">Medium Impact</span>
+              </div>
+              <div class="rec-title">Add composite B-tree index on <code style="font-family:var(--font-mono);">orders(customer_id, status, created_at)</code></div>
+              <div class="rec-target">customer-360.public.orders · 280M rows</div>
+              <div class="rec-desc">
+                The customer dashboard query pattern shows repeated scans filtering on these three columns together. EXPLAIN ANALYZE shows a sequential scan costing 1.8s p95.
+              </div>
+              <div class="rec-impact" style="margin-top:4px;">
+                <span>p95 latency: <strong>1.8s → 84ms</strong></span>
+                <span>Slot hours/day: <strong>−18%</strong></span>
+                <span>Storage: <strong class="neg">+2.1 GB</strong></span>
+              </div>
+            </div>
+            <div class="rec-actions">
+              <button class="btn btn-primary">Apply</button>
+              <button class="btn">Simulate</button>
+              <button class="btn btn-ghost">Reject</button>
+            </div>
+          </article>
+
+          <!-- REC 3 -->
+          <article class="rec">
+            <div class="rec-icon warn">!</div>
+            <div class="rec-content">
+              <div class="rec-meta">
+                <span>BigQuery ML</span><span class="dot"></span>
+                <span>Drift detected</span><span class="dot"></span>
+                <span>Sage</span><span class="dot"></span>
+                <span class="tag med">Refresh Required</span>
+              </div>
+              <div class="rec-title">Retrain <code style="font-family:var(--font-mono);">churn_predictor_v3</code> — feature distribution drift &gt; 0.18</div>
+              <div class="rec-target">ml-models.production.churn_predictor_v3 · last trained 47 days ago</div>
+              <div class="rec-desc">
+                PSI for <code>days_since_last_login</code> exceeded threshold 12 days ago. Recent predictions showing 7% degradation in F1 vs baseline.
+              </div>
+              <div class="rec-impact" style="margin-top:4px;">
+                <span>Drift score: <strong class="neg">0.184</strong></span>
+                <span>Est. accuracy regain: <strong>+6.2%</strong></span>
+                <span>Train cost: <strong class="neg">$84</strong></span>
+              </div>
+            </div>
+            <div class="rec-actions">
+              <button class="btn btn-primary">Schedule</button>
+              <button class="btn">Review</button>
+              <button class="btn btn-ghost">Snooze</button>
+            </div>
+          </article>
+
+          <!-- REC 4 -->
+          <article class="rec">
+            <div class="rec-icon perf">⊟</div>
+            <div class="rec-content">
+              <div class="rec-meta">
+                <span>Spanner</span><span class="dot"></span>
+                <span>Hot spot</span><span class="dot"></span>
+                <span>Sage + Forge</span><span class="dot"></span>
+                <span class="tag high">High Impact</span>
+              </div>
+              <div class="rec-title">Add hash prefix to <code style="font-family:var(--font-mono);">transaction_log</code> primary key to relieve range hot-spot</div>
+              <div class="rec-target">payments-prod.ledger.transaction_log · 12 splits, 1 hot</div>
+              <div class="rec-desc">
+                Load-based splitting shows a single split absorbing 38% of writes. Hashing the leading <code>region_id</code> column should distribute load across all splits.
+              </div>
+              <div class="rec-impact" style="margin-top:4px;">
+                <span>Write latency p99: <strong>240ms → ~60ms</strong></span>
+                <span>Migration: <strong class="neg">requires backfill</strong></span>
+                <span>Risk: <strong style="color:var(--critical);">high</strong></span>
+              </div>
+            </div>
+            <div class="rec-actions">
+              <button class="btn">Plan migration</button>
+              <button class="btn">Simulate</button>
+              <button class="btn btn-ghost">Reject</button>
+            </div>
+          </article>
+
+        </div>
+      </section>
+
+      <!-- IMPACT CHART -->
+      <section class="card">
+        <div class="card-header">
+          <div class="card-title">
+            <span>Cumulative Impact</span>
+            <span class="card-title-mono">· last 30 days</span>
+          </div>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-ghost">7d</button>
+            <button class="btn">30d</button>
+            <button class="btn btn-ghost">90d</button>
+          </div>
+        </div>
+        <div class="chart-wrap">
+          <div class="chart-legend">
+            <span><span class="key" style="background:var(--accent);"></span>Bytes scanned (TB/day)</span>
+            <span><span class="key" style="background:var(--info);"></span>Avg query latency (ms)</span>
+          </div>
+          <svg class="chart" viewBox="0 0 720 200" preserveAspectRatio="none">
+            <!-- grid lines -->
+            <g stroke="rgba(255,255,255,0.05)" stroke-width="1">
+              <line x1="0" y1="50" x2="720" y2="50"/>
+              <line x1="0" y1="100" x2="720" y2="100"/>
+              <line x1="0" y1="150" x2="720" y2="150"/>
+            </g>
+            <!-- area fill 1 -->
+            <path d="M0,40 L40,55 L80,50 L120,70 L160,65 L200,80 L240,75 L280,90 L320,100 L360,110 L400,125 L440,135 L480,145 L520,150 L560,160 L600,165 L640,168 L680,170 L720,175 L720,200 L0,200 Z"
+                  fill="url(#chartGrad)"/>
+            <path d="M0,40 L40,55 L80,50 L120,70 L160,65 L200,80 L240,75 L280,90 L320,100 L360,110 L400,125 L440,135 L480,145 L520,150 L560,160 L600,165 L640,168 L680,170 L720,175"
+                  fill="none" stroke="#7df9a9" stroke-width="1.5"/>
+            <!-- line 2 -->
+            <path d="M0,60 L40,70 L80,68 L120,90 L160,82 L200,100 L240,95 L280,108 L320,118 L360,125 L400,138 L440,142 L480,148 L520,152 L560,158 L600,160 L640,162 L680,165 L720,168"
+                  fill="none" stroke="#6ea8ff" stroke-width="1.5" stroke-dasharray="3,3"/>
+            <!-- markers for applied changes -->
+            <g fill="#7df9a9">
+              <circle cx="120" cy="70" r="4"/>
+              <circle cx="280" cy="90" r="4"/>
+              <circle cx="440" cy="135" r="4"/>
+              <circle cx="600" cy="165" r="4"/>
+            </g>
+            <!-- x-axis labels -->
+            <g fill="#5a6478" font-family="JetBrains Mono" font-size="10">
+              <text x="0" y="195">Mar 26</text>
+              <text x="180" y="195">Apr 02</text>
+              <text x="360" y="195">Apr 09</text>
+              <text x="540" y="195">Apr 16</text>
+              <text x="680" y="195">Apr 23</text>
+            </g>
+          </svg>
+        </div>
+      </section>
+
+    </div><!-- /left-col -->
+
+    <!-- ===== RIGHT COLUMN ===== -->
+    <div class="right-col">
+
+      <!-- CHAT -->
+      <section class="card chat">
+        <div class="card-header">
+          <div class="card-title">
+            <span>Ask the Swarm</span>
+          </div>
+          <span class="card-title-mono">· Gemini 2.5 Pro</span>
+        </div>
+        <div class="chat-messages">
+
+          <div class="msg">
+            <div class="msg-avatar user">RK</div>
+            <div class="msg-bubble">
+              Why is <code>customer_360_dashboard</code> 3× slower this week?
+            </div>
+          </div>
+
+          <div class="msg">
+            <div class="msg-avatar ai">E</div>
+            <div class="msg-bubble ai-msg">
+              Sage traced the regression to a <code>JOIN</code> against <code>orders_v2</code> that grew from 180M → 280M rows after the April 18 migration. The existing index on <code>(customer_id)</code> no longer satisfies the query — it now needs a composite key.
+              <div class="reasoning">
+                Investigated 47 query executions over 7 days. P95 latency shifted from 220ms → 680ms on Apr 19. EXPLAIN plan changed: nested loop → hash join. Index recommendation queued as Rec #2 above.
+              </div>
+            </div>
+          </div>
+
+          <div class="msg">
+            <div class="msg-avatar user">RK</div>
+            <div class="msg-bubble">
+              What's the rollback plan if Rec #1 goes wrong?
+            </div>
+          </div>
+
+          <div class="msg">
+            <div class="msg-avatar ai">E</div>
+            <div class="msg-bubble ai-msg">
+              Wright will use a CTAS pattern: the old table is preserved as <code>events_raw__pre_evo_1247</code> for 7 days. Cutover happens via atomic table-swap. Rollback = single <code>ALTER TABLE … RENAME</code> (≈3s).
+              <div class="reasoning">
+                Pulled rollback playbook v4 from Codex's knowledge graph. 12 similar repartition operations executed previously, 0 incidents, 1 rollback used (Feb 14 — schema mismatch caught in 90s).
+              </div>
+            </div>
+          </div>
+
+        </div>
+        <div class="chat-input">
+          <span style="color:var(--accent); font-family:var(--font-mono);">›</span>
+          <input placeholder="Ask anything about your data estate…"/>
+          <button class="chat-send">→</button>
+        </div>
+      </section>
+
+      <!-- KNOWLEDGE STATS -->
+      <section class="card">
+        <div class="card-header">
+          <div class="card-title">
+            <span>Memory</span>
+            <span class="card-title-mono">· self-knowledge graph</span>
+          </div>
+        </div>
+        <div class="graph-stats">
+          <div>
+            <div class="graph-stat-label">Decisions logged</div>
+            <div class="graph-stat-val">2,841</div>
+          </div>
+          <div>
+            <div class="graph-stat-label">Patterns learned</div>
+            <div class="graph-stat-val">147</div>
+          </div>
+          <div>
+            <div class="graph-stat-label">Rollbacks · 90d</div>
+            <div class="graph-stat-val" style="color:var(--warn);">3</div>
+          </div>
+          <div>
+            <div class="graph-stat-label">Confidence avg</div>
+            <div class="graph-stat-val" style="color:var(--accent);">94<span style="font-size:14px;color:var(--text-muted);">%</span></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ACTIVITY -->
+      <section class="card">
+        <div class="card-header">
+          <div class="card-title">
+            <span>Live Activity</span>
+          </div>
+          <span class="status-pill"><span class="status-dot"></span>streaming</span>
+        </div>
+        <div class="activity">
+          <div class="activity-item">
+            <div class="activity-time">04:42:11</div>
+            <div class="activity-marker"><div class="activity-dot"></div></div>
+            <div class="activity-content">
+              <span class="agent-tag">SAGE →</span>
+              Identified high-scan pattern on <em>events_raw</em>, 94% temporal-filtered
+            </div>
+          </div>
+          <div class="activity-item">
+            <div class="activity-time">04:42:38</div>
+            <div class="activity-marker"><div class="activity-dot"></div></div>
+            <div class="activity-content">
+              <span class="agent-tag">FORGE →</span>
+              Generated 5 candidate strategies, ranked by simulated impact
+            </div>
+          </div>
+          <div class="activity-item">
+            <div class="activity-time">04:43:02</div>
+            <div class="activity-marker"><div class="activity-dot info"></div></div>
+            <div class="activity-content">
+              <span class="agent-tag">ECHO →</span>
+              Cloned <em>events_raw</em> to shadow dataset (2% sample, 84M rows)
+            </div>
+          </div>
+          <div class="activity-item">
+            <div class="activity-time">04:44:17</div>
+            <div class="activity-marker"><div class="activity-dot info"></div></div>
+            <div class="activity-content">
+              <span class="agent-tag">ECHO →</span>
+              Replayed 50-query benchmark on shadow · −87% bytes confirmed
+            </div>
+          </div>
+          <div class="activity-item">
+            <div class="activity-time">04:44:51</div>
+            <div class="activity-marker"><div class="activity-dot warn"></div></div>
+            <div class="activity-content">
+              <span class="agent-tag">CODEX →</span>
+              Cross-referenced 4 prior repartitions on similar tables — all positive
+            </div>
+          </div>
+          <div class="activity-item">
+            <div class="activity-time">04:45:09</div>
+            <div class="activity-marker"><div class="activity-dot"></div></div>
+            <div class="activity-content">
+              <span class="agent-tag">COORD →</span>
+              Recommendation surfaced for human review · awaiting decision
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </div><!-- /right-col -->
+
+    <footer class="footer">
+      EvoAgent · Cycle #1247 · Next scheduled run 25.04 · 04:00 UTC · Powered by ADK + Vertex AI + MCP
+    </footer>
+
+  </main>
+</div>
+
+</body>
+</html>
