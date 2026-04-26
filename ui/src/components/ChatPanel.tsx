@@ -1,12 +1,11 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { mockChatMessages } from "@/lib/mock-data";
 import { ChatMessage } from "@/lib/types";
 import { Send } from "lucide-react";
 
 export default function ChatPanel() {
-  const [messages, setMessages] = useState<ChatMessage[]>(mockChatMessages);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamingContent, setStreamingContent] = useState("");
@@ -24,6 +23,7 @@ export default function ChatPanel() {
       role: "user",
       content: input,
     };
+    const sentInput = input;
     setMessages((prev) => [...prev, userMsg]);
     setInput("");
     setIsStreaming(true);
@@ -35,7 +35,7 @@ export default function ChatPanel() {
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message: input }),
+          body: JSON.stringify({ message: sentInput }),
         }
       );
 
@@ -48,72 +48,36 @@ export default function ChatPanel() {
           const { done, value } = await reader.read();
           if (done) break;
           const text = decoder.decode(value, { stream: true });
-          const lines = text.split("\n");
-          for (const line of lines) {
+          for (const line of text.split("\n")) {
             if (line.startsWith("data: ")) {
               const data = line.slice(6);
               if (data === "[DONE]") continue;
+              if (data === "...") continue; // typing indicator
               fullContent += data;
               setStreamingContent(fullContent);
             }
           }
         }
 
-        const aiMsg: ChatMessage = {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `msg-${Date.now()}`,
+            role: "ai",
+            content: fullContent || "Analysis complete.",
+          },
+        ]);
+      }
+    } catch (err) {
+      console.error("Chat request failed:", err);
+      setMessages((prev) => [
+        ...prev,
+        {
           id: `msg-${Date.now()}`,
           role: "ai",
-          content: fullContent || "I'll analyze that pattern and get back to you with recommendations.",
-        };
-        setMessages((prev) => [...prev, aiMsg]);
-      } else {
-        // Fallback: mock streaming
-        const mockResponse =
-          "Based on my analysis, I can see the pattern you're describing. Let me coordinate with the swarm to investigate further and provide a detailed recommendation.";
-        let idx = 0;
-        const interval = setInterval(() => {
-          if (idx < mockResponse.length) {
-            setStreamingContent(mockResponse.slice(0, idx + 1));
-            idx++;
-          } else {
-            clearInterval(interval);
-            setMessages((prev) => [
-              ...prev,
-              {
-                id: `msg-${Date.now()}`,
-                role: "ai",
-                content: mockResponse,
-              },
-            ]);
-            setStreamingContent("");
-            setIsStreaming(false);
-          }
-        }, 30);
-        return;
-      }
-    } catch {
-      // Fallback mock streaming
-      const mockResponse =
-        "Based on my analysis, I can see the pattern you're describing. Let me coordinate with the swarm to investigate further.";
-      let idx = 0;
-      const interval = setInterval(() => {
-        if (idx < mockResponse.length) {
-          setStreamingContent(mockResponse.slice(0, idx + 1));
-          idx++;
-        } else {
-          clearInterval(interval);
-          setMessages((prev) => [
-            ...prev,
-            {
-              id: `msg-${Date.now()}`,
-              role: "ai",
-              content: mockResponse,
-            },
-          ]);
-          setStreamingContent("");
-          setIsStreaming(false);
-        }
-      }, 30);
-      return;
+          content: "Could not reach the swarm. Check that the API is running.",
+        },
+      ]);
     }
 
     setStreamingContent("");
@@ -155,32 +119,29 @@ export default function ChatPanel() {
       </div>
 
       {/* Messages */}
-      <div
-        className="flex-1 overflow-y-auto px-6 py-5 flex flex-col gap-4"
-      >
+      <div className="flex-1 overflow-y-auto px-6 py-5 flex flex-col gap-4">
+        {messages.length === 0 && !isStreaming && (
+          <div
+            className="flex-1 flex items-center justify-center text-[13px]"
+            style={{ color: "var(--text-dim)", fontFamily: "var(--font-mono)" }}
+          >
+            Ask anything about your database…
+          </div>
+        )}
+
         {messages.map((msg) => (
           <div key={msg.id} className="flex gap-2.5">
-            {/* Avatar */}
             <div
               className="w-[26px] h-[26px] rounded-md shrink-0 flex items-center justify-center text-[10px] font-semibold"
               style={{
                 fontFamily: "var(--font-mono)",
                 ...(msg.role === "user"
-                  ? {
-                      background:
-                        "linear-gradient(135deg, #6ea8ff, #b794f6)",
-                      color: "white",
-                    }
-                  : {
-                      background: "var(--accent)",
-                      color: "var(--bg)",
-                    }),
+                  ? { background: "linear-gradient(135deg, #6ea8ff, #b794f6)", color: "white" }
+                  : { background: "var(--accent)", color: "var(--bg)" }),
               }}
             >
-              {msg.role === "user" ? "RK" : "E"}
+              {msg.role === "user" ? "U" : "E"}
             </div>
-
-            {/* Bubble */}
             <div className="flex-1 text-[13px] leading-relaxed" style={{ color: "var(--text)" }}>
               <div
                 dangerouslySetInnerHTML={{
@@ -206,46 +167,28 @@ export default function ChatPanel() {
           </div>
         ))}
 
-        {/* Streaming message */}
+        {/* Streaming bubble */}
         {isStreaming && (
           <div className="flex gap-2.5">
             <div
               className="w-[26px] h-[26px] rounded-md shrink-0 flex items-center justify-center text-[10px] font-semibold"
-              style={{
-                fontFamily: "var(--font-mono)",
-                background: "var(--accent)",
-                color: "var(--bg)",
-              }}
+              style={{ fontFamily: "var(--font-mono)", background: "var(--accent)", color: "var(--bg)" }}
             >
               E
             </div>
-            <div
-              className="flex-1 text-[13px] leading-relaxed"
-              style={{ color: "var(--text)" }}
-            >
+            <div className="flex-1 text-[13px] leading-relaxed" style={{ color: "var(--text)" }}>
               {streamingContent || (
                 <span className="flex gap-1">
-                  <span
-                    className="w-1.5 h-1.5 rounded-full"
-                    style={{
-                      background: "var(--text-muted)",
-                      animation: "typingDot 1.4s ease-in-out infinite",
-                    }}
-                  />
-                  <span
-                    className="w-1.5 h-1.5 rounded-full"
-                    style={{
-                      background: "var(--text-muted)",
-                      animation: "typingDot 1.4s ease-in-out 0.2s infinite",
-                    }}
-                  />
-                  <span
-                    className="w-1.5 h-1.5 rounded-full"
-                    style={{
-                      background: "var(--text-muted)",
-                      animation: "typingDot 1.4s ease-in-out 0.4s infinite",
-                    }}
-                  />
+                  {[0, 0.2, 0.4].map((delay, i) => (
+                    <span
+                      key={i}
+                      className="w-1.5 h-1.5 rounded-full"
+                      style={{
+                        background: "var(--text-muted)",
+                        animation: `typingDot 1.4s ease-in-out ${delay}s infinite`,
+                      }}
+                    />
+                  ))}
                 </span>
               )}
             </div>
@@ -258,30 +201,17 @@ export default function ChatPanel() {
       {/* Input */}
       <div
         className="flex items-center gap-2.5 px-4 py-3.5"
-        style={{
-          borderTop: "1px solid var(--border)",
-          background: "var(--surface)",
-        }}
+        style={{ borderTop: "1px solid var(--border)", background: "var(--surface)" }}
       >
-        <span
-          style={{
-            color: "var(--accent)",
-            fontFamily: "var(--font-mono)",
-          }}
-        >
-          ›
-        </span>
+        <span style={{ color: "var(--accent)", fontFamily: "var(--font-mono)" }}>›</span>
         <input
           type="text"
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && handleSend()}
-          placeholder="Ask anything about your data estate…"
+          placeholder="Ask anything about your database…"
           className="flex-1 bg-transparent border-none outline-none text-[13px] p-1"
-          style={{
-            color: "var(--text)",
-            fontFamily: "var(--font-body)",
-          }}
+          style={{ color: "var(--text)", fontFamily: "var(--font-body)" }}
           disabled={isStreaming}
         />
         <button

@@ -1,13 +1,11 @@
-L"use client";
+"use client";
 
 import { useState, useEffect } from "react";
-import { mockActivityEvents } from "@/lib/mock-data";
 import { ActivityEvent } from "@/lib/types";
 
 export default function ActivityFeed() {
-  const [events, setEvents] = useState<ActivityEvent[]>(mockActivityEvents);
+  const [events, setEvents] = useState<ActivityEvent[]>([]);
 
-  // SSE connection for live activity
   useEffect(() => {
     let es: EventSource | null = null;
     try {
@@ -30,20 +28,17 @@ export default function ActivityFeed() {
                   ? "warn"
                   : "accent",
             };
-            setEvents((prev) => {
-              const updated = [newEvent, ...prev];
-              return updated.slice(0, 50); // Cap at 50
-            });
+            setEvents((prev) => [newEvent, ...prev].slice(0, 50));
           }
         } catch {
-          // ignore
+          // ignore parse errors
         }
       };
       es.onerror = () => {
         es?.close();
       };
     } catch {
-      // SSE not available
+      // SSE not available in this environment
     }
     return () => es?.close();
   }, []);
@@ -90,85 +85,89 @@ export default function ActivityFeed() {
 
       {/* Activity items */}
       <div className="py-1 pb-3">
-        {events.map((event, index) => (
+        {events.length === 0 ? (
           <div
-            key={event.id}
-            className="grid gap-3 items-start relative"
-            style={{
-              gridTemplateColumns: "60px 12px 1fr",
-              padding: "10px 24px",
-              animation:
-                index === 0
-                  ? "slideInUp 0.3s ease-out"
-                  : undefined,
-            }}
+            className="px-6 py-10 text-center text-[13px]"
+            style={{ color: "var(--text-dim)", fontFamily: "var(--font-mono)" }}
           >
-            {/* Time */}
+            Waiting for agent activity…
+          </div>
+        ) : (
+          events.map((event, index) => (
             <div
-              className="text-right pt-0.5 text-[10px]"
+              key={event.id}
+              className="grid gap-3 items-start relative"
               style={{
-                fontFamily: "var(--font-mono)",
-                color: "var(--text-dim)",
+                gridTemplateColumns: "60px 12px 1fr",
+                padding: "10px 24px",
+                animation: index === 0 ? "slideInUp 0.3s ease-out" : undefined,
               }}
             >
-              {event.timestamp}
-            </div>
-
-            {/* Marker */}
-            <div className="relative h-full flex justify-center">
-              {/* Vertical line */}
+              {/* Time */}
               <div
-                className="absolute top-0 bottom-0 w-px"
-                style={{ background: "var(--border)" }}
-              />
-              {/* Dot */}
-              <div
-                className="w-2 h-2 rounded-full mt-1 z-10"
-                style={{
-                  background:
-                    event.dot_type === "warn"
-                      ? "var(--warn)"
-                      : event.dot_type === "info"
-                      ? "var(--info)"
-                      : "var(--accent)",
-                  boxShadow: `0 0 0 3px var(--bg-elev)`,
-                }}
-              />
-            </div>
-
-            {/* Content */}
-            <div
-              className="text-[12px] leading-relaxed pb-1"
-              style={{ color: "var(--text)" }}
-            >
-              <span
-                className="mr-2 text-[10px] uppercase tracking-wide"
+                className="text-right pt-0.5 text-[10px]"
                 style={{
                   fontFamily: "var(--font-mono)",
-                  color: "var(--text-muted)",
-                  letterSpacing: "0.08em",
+                  color: "var(--text-dim)",
                 }}
               >
-                {event.agent} →
-              </span>
-              {event.content}
-              {event.highlight && (
-                <>
-                  {" "}
-                  <em
-                    className="not-italic text-[11px]"
-                    style={{
-                      color: "var(--accent)",
-                      fontFamily: "var(--font-mono)",
-                    }}
-                  >
-                    {event.highlight}
-                  </em>
-                </>
-              )}
+                {event.timestamp}
+              </div>
+
+              {/* Marker */}
+              <div className="relative h-full flex justify-center">
+                <div
+                  className="absolute top-0 bottom-0 w-px"
+                  style={{ background: "var(--border)" }}
+                />
+                <div
+                  className="w-2 h-2 rounded-full mt-1 z-10"
+                  style={{
+                    background:
+                      event.dot_type === "warn"
+                        ? "var(--warn)"
+                        : event.dot_type === "info"
+                        ? "var(--info)"
+                        : "var(--accent)",
+                    boxShadow: `0 0 0 3px var(--bg-elev)`,
+                  }}
+                />
+              </div>
+
+              {/* Content */}
+              <div
+                className="text-[12px] leading-relaxed pb-1"
+                style={{ color: "var(--text)" }}
+              >
+                <span
+                  className="mr-2 text-[10px] uppercase tracking-wide"
+                  style={{
+                    fontFamily: "var(--font-mono)",
+                    color: "var(--text-muted)",
+                    letterSpacing: "0.08em",
+                  }}
+                >
+                  {event.agent} →
+                </span>
+                {event.content}
+                {event.highlight && (
+                  <>
+                    {" "}
+                    <em
+                      className="not-italic text-[11px]"
+                      style={{
+                        color: "var(--accent)",
+                        fontFamily: "var(--font-mono)",
+                      }}
+                    >
+                      {event.highlight}
+                    </em>
+                  </>
+                )}
+              </div>
             </div>
-          </div>
-        ))}
+          ))
+        )}
       </div>
     </section>
   );

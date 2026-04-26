@@ -1,4 +1,46 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import { fetchJSON } from "@/lib/api";
+
+interface SwarmStatus {
+  active: boolean;
+  agentCount: number;
+  cycle_id: number;
+}
+
+interface CurrentDatabase {
+  host: string;
+  port: number;
+  database: string;
+  target_schema: string;
+  db_type: string;
+}
+
 export default function Hero() {
+  const [swarm, setSwarm] = useState<SwarmStatus | null>(null);
+  const [db, setDb] = useState<CurrentDatabase | null>(null);
+
+  useEffect(() => {
+    fetchJSON<SwarmStatus>("/swarm/status")
+      .then(setSwarm)
+      .catch(() => {});
+
+    fetchJSON<CurrentDatabase>("/gcp/current-database")
+      .then(setDb)
+      .catch(() => {});
+  }, []);
+
+  const cycleLabel = swarm
+    ? `Cycle #${swarm.cycle_id.toLocaleString()}`
+    : "Cycle —";
+
+  const dbLabel = db
+    ? `${db.db_type.toUpperCase()} (${db.host}:${db.port}/${db.database})`
+    : "—";
+
+  const schemaLabel = db?.target_schema || "—";
+
   return (
     <section className="flex items-end justify-between mb-2 stagger-1">
       <div>
@@ -19,7 +61,7 @@ export default function Hero() {
             letterSpacing: "0.1em",
           }}
         >
-          Coordinator · Cycle #1,247 · Started 04:00 UTC
+          Coordinator · {cycleLabel} · {swarm?.active ? "Running" : "Idle"}
         </div>
       </div>
       <div
@@ -31,21 +73,21 @@ export default function Hero() {
         }}
       >
         <div>
-          WORKLOAD ·{" "}
+          DATABASE ·{" "}
           <strong style={{ color: "var(--text)", fontWeight: 500 }}>
-            analytics-prod
+            {dbLabel}
           </strong>
         </div>
         <div>
-          REGION ·{" "}
+          TARGET SCHEMA ·{" "}
           <strong style={{ color: "var(--text)", fontWeight: 500 }}>
-            us-central1
+            {schemaLabel}
           </strong>
         </div>
         <div>
-          DATABASES ·{" "}
+          AGENTS ·{" "}
           <strong style={{ color: "var(--text)", fontWeight: 500 }}>
-            BigQuery, AlloyDB, Spanner
+            {swarm ? `${swarm.agentCount} active` : "—"}
           </strong>
         </div>
       </div>

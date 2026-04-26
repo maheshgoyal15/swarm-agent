@@ -1,23 +1,30 @@
 import pg8000.native
 import json
 import sys
+import os
+
 
 def get_connection():
     return pg8000.native.Connection(
-        host="35.223.127.94",
-        port=5432,
-        database="postgres",
-        user="postgres",
-        password="Password"
+        host=os.getenv("DB_HOST", "localhost"),
+        port=int(os.getenv("DB_PORT", "5432")),
+        database=os.getenv("DB_NAME", "postgres"),
+        user=os.getenv("DB_USER", "postgres"),
+        password=os.getenv("DB_PASSWORD", ""),
     )
+
+
+def get_target_schema() -> str:
+    return os.getenv("TARGET_SCHEMA", "public")
+
 
 def update_agent_status(agent_codename: str, status: str, task: str):
     """Updates the status of an agent in the database."""
     try:
         conn = get_connection()
         query = """
-        UPDATE evo_state.agent_status 
-        SET status = $1, task = $2, updated_at = NOW() 
+        UPDATE evo_state.agent_status
+        SET status = $1, task = $2, updated_at = NOW()
         WHERE agent_codename = $3
         RETURNING agent_codename;
         """
@@ -27,45 +34,48 @@ def update_agent_status(agent_codename: str, status: str, task: str):
     except Exception as e:
         print(f"Error updating agent status: {e}", file=sys.stderr)
 
+
 def read_schema() -> str:
     """
-    Reads the schema of the AlloyDB database for the 'perfagent_heavy' schema.
-    
+    Reads the schema of the target database schema (TARGET_SCHEMA env var).
+
     Returns:
         str: A JSON string representation of the database schema.
     """
-    print("[DB Tool] Reading schema for 'perfagent_heavy'...")
-    update_agent_status('sage', 'analyzing', 'Reading schema')
+    schema_name = get_target_schema()
+    print(f"[DB Tool] Reading schema for '{schema_name}'...")
+    update_agent_status('sage', 'analyzing', f'Reading schema for {schema_name}')
     try:
         conn = get_connection()
         query = """
-        SELECT table_name, column_name, data_type 
-        FROM information_schema.columns 
-        WHERE table_schema = 'perfagent_heavy'
+        SELECT table_name, column_name, data_type
+        FROM information_schema.columns
+        WHERE table_schema = $1
         ORDER BY table_name, ordinal_position;
         """
-        rows = conn.run(query)
-        
-        schema = {"tables": {}}
+        rows = conn.run(query, (schema_name,))
+
+        schema = {"tables": {}, "schema": schema_name}
         for row in rows:
             table_name, column_name, data_type = row
             if table_name not in schema["tables"]:
                 schema["tables"][table_name] = {"columns": []}
             schema["tables"][table_name]["columns"].append({"name": column_name, "type": data_type})
-            
+
         conn.close()
         return json.dumps(schema, indent=2)
     except Exception as e:
         print(f"Error reading schema: {e}", file=sys.stderr)
         return json.dumps({"error": str(e)})
 
+
 def execute_query(sql_query: str) -> str:
     """
-    Executes a SQL query against the AlloyDB database and returns the result.
-    
+    Executes a SQL query against the database and returns the result.
+
     Args:
         sql_query (str): The SQL query to execute.
-        
+
     Returns:
         str: A JSON string containing the query results.
     """
@@ -79,10 +89,11 @@ def execute_query(sql_query: str) -> str:
         print(f"Error executing query: {e}", file=sys.stderr)
         return json.dumps({"error": str(e)})
 
+
 def get_slow_queries() -> str:
     """
     Retrieves top slow queries from pg_stat_statements.
-    
+
     Returns:
         str: A JSON string containing the top slow queries.
     """
@@ -91,10 +102,10 @@ def get_slow_queries() -> str:
     try:
         conn = get_connection()
         query = """
-        SELECT query, calls, total_exec_time 
-        FROM pg_stat_statements 
-        WHERE query NOT LIKE '%pg_%' 
-        ORDER BY total_exec_time DESC 
+        SELECT query, calls, total_exec_time
+        FROM pg_stat_statements
+        WHERE query NOT LIKE '%pg_%'
+        ORDER BY total_exec_time DESC
         LIMIT 10;
         """
         rows = conn.run(query)
@@ -104,35 +115,38 @@ def get_slow_queries() -> str:
         print(f"Error reading slow queries: {e}", file=sys.stderr)
         return json.dumps({"error": str(e)})
 
+
 def get_table_stats() -> str:
     """
-    Retrieves statistics for tables in the 'perfagent_heavy' schema, including size and row counts.
-    
+    Retrieves statistics for tables in the target schema, including size and row counts.
+
     Returns:
         str: A JSON string containing table statistics.
     """
-    print("[DB Tool] Reading table statistics for 'perfagent_heavy'...")
-    update_agent_status('sage', 'analyzing', 'Reading table stats')
+    schema_name = get_target_schema()
+    print(f"[DB Tool] Reading table statistics for '{schema_name}'...")
+    update_agent_status('sage', 'analyzing', f'Reading table stats for {schema_name}')
     try:
         conn = get_connection()
         query = """
-        SELECT relname as table_name, 
+        SELECT relname as table_name,
                n_live_tup as row_count,
                pg_total_relation_size(relid) as total_size_bytes
-        FROM pg_stat_user_tables 
-        WHERE schemaname = 'perfagent_heavy';
+        FROM pg_stat_user_tables
+        WHERE schemaname = $1;
         """
-        rows = conn.run(query)
+        rows = conn.run(query, (schema_name,))
         conn.close()
         return json.dumps(rows, indent=2, default=str)
     except Exception as e:
         print(f"Error reading table stats: {e}", file=sys.stderr)
         return json.dumps({"error": str(e)})
 
+
 def get_lock_waits() -> str:
     """
     Retrieves current lock waits to identify contention.
-    
+
     Returns:
         str: A JSON string containing active lock waits.
     """
@@ -149,7 +163,7 @@ def get_lock_waits() -> str:
                blocking_activity.query   AS blocking_query
         FROM pg_catalog.pg_locks         blocked_locks
         JOIN pg_catalog.pg_stat_activity blocked_activity  ON blocked_locks.pid = blocked_activity.pid
-        JOIN pg_catalog.pg_locks         blocking_locks 
+        JOIN pg_catalog.pg_locks         blocking_locks
              ON blocking_locks.locktype = blocked_locks.locktype
              AND blocking_locks.DATABASE IS NOT DISTINCT FROM blocked_locks.DATABASE
              AND blocking_locks.relation IS NOT DISTINCT FROM blocked_locks.relation
@@ -171,17 +185,18 @@ def get_lock_waits() -> str:
         print(f"Error reading lock waits: {e}", file=sys.stderr)
         return json.dumps({"error": str(e)})
 
+
 def save_recommendation(target_resource: str, rec_type: str, severity: str, rationale: str, sql: str) -> str:
     """
     Saves an optimization recommendation generated by the agent to the database.
-    
+
     Args:
         target_resource (str): The table or index targeted.
         rec_type (str): Type of recommendation (e.g., 'index', 'partition').
         severity (str): 'high', 'medium', or 'low'.
         rationale (str): Explanation for the recommendation.
         sql (str): The generated SQL statement to apply.
-        
+
     Returns:
         str: Success or error message.
     """

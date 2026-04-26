@@ -1,29 +1,30 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { mockAgents } from "@/lib/mock-data";
+import { useState, useEffect } from "react";
 import { Agent } from "@/lib/types";
 import { fetchJSON } from "@/lib/api";
 
-export default function AgentSwarm() {
-  const [agents, setAgents] = useState<Agent[]>(mockAgents);
-  const [pulsingId, setPulsingId] = useState<number | null>(null);
-  const [fallbackPolling, setFallbackPolling] = useState<boolean>(false);
+const AGENT_DEFAULTS: Agent[] = [
+  { id: 1, name: "// 01 — Analyzer",  role: "Sage",   codename: "sage",   status: "idle", task: "Idle", active: false },
+  { id: 2, name: "// 02 — Optimizer", role: "Forge",  codename: "forge",  status: "idle", task: "Idle", active: false },
+  { id: 3, name: "// 03 — Simulator", role: "Echo",   codename: "echo",   status: "idle", task: "Idle", active: false },
+  { id: 4, name: "// 04 — Applier",   role: "Wright", codename: "wright", status: "idle", task: "Idle", active: false },
+  { id: 5, name: "// 05 — Historian", role: "Codex",  codename: "codex",  status: "idle", task: "Idle", active: false },
+];
 
-  // Fetch initial data
+export default function AgentSwarm() {
+  const [agents, setAgents] = useState<Agent[]>(AGENT_DEFAULTS);
+  const [pulsingId, setPulsingId] = useState<number | null>(null);
+  const [fallbackPolling, setFallbackPolling] = useState(false);
+
+  // Fetch initial state from DB
   useEffect(() => {
-    async function loadAgents() {
-      try {
-        const data = await fetchJSON<Agent[]>("/agents");
-        setAgents(data);
-      } catch (err) {
-        console.error("Failed to load agents:", err);
-      }
-    }
-    loadAgents();
+    fetchJSON<Agent[]>("/agents")
+      .then(setAgents)
+      .catch((err) => console.error("Failed to load agents:", err));
   }, []);
 
-  // SSE connection for agent updates
+  // SSE: live updates per agent status change
   useEffect(() => {
     let es: EventSource | null = null;
     try {
@@ -33,23 +34,19 @@ export default function AgentSwarm() {
       es.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
-          if (data.agent) {
-            setAgents((prev) =>
-              prev.map((a) =>
-                a.codename === data.agent.toLowerCase()
-                  ? { ...a, status: data.status, task: data.details, active: data.status !== "awaiting approval" && data.status !== "idle" }
-                  : a
-              )
-            );
-            // Pulse the updated agent
-            const agentIdx = mockAgents.findIndex(
-              (a) => a.codename === data.agent.toLowerCase()
-            );
-            if (agentIdx >= 0) {
-              setPulsingId(mockAgents[agentIdx].id);
+          if (!data.agent) return;
+
+          setAgents((prev) => {
+            const updated = prev.map((a) => {
+              if (a.codename !== data.agent.toLowerCase()) return a;
+              const active = data.status !== "awaiting approval" && data.status !== "idle";
+              // Trigger pulse
+              setPulsingId(a.id);
               setTimeout(() => setPulsingId(null), 1000);
-            }
-          }
+              return { ...a, status: data.status, task: data.details, active };
+            });
+            return updated;
+          });
         } catch {
           // ignore parse errors
         }
@@ -66,20 +63,14 @@ export default function AgentSwarm() {
     return () => es?.close();
   }, []);
 
-  // Fallback polling effect
+  // Fallback polling when SSE is unavailable
   useEffect(() => {
     if (!fallbackPolling) return;
-    
-    console.log("Starting fallback polling in AgentSwarm...");
-    const interval = setInterval(async () => {
-      try {
-        const data = await fetchJSON<Agent[]>("/agents");
-        setAgents(data);
-      } catch (err) {
-        console.error("Polling failed in AgentSwarm:", err);
-      }
-    }, 3000); // Poll every 3 seconds
-    
+    const interval = setInterval(() => {
+      fetchJSON<Agent[]>("/agents")
+        .then(setAgents)
+        .catch((err) => console.error("Polling failed in AgentSwarm:", err));
+    }, 3000);
     return () => clearInterval(interval);
   }, [fallbackPolling]);
 
@@ -111,7 +102,7 @@ export default function AgentSwarm() {
               letterSpacing: "0.1em",
             }}
           >
-            · 5 agents · A2A protocol
+            · {agents.length} agents · A2A protocol
           </span>
         </div>
         <button
@@ -140,15 +131,12 @@ export default function AgentSwarm() {
               background: "var(--surface)",
               border: "1px solid var(--border)",
               animation:
-                pulsingId === agent.id
-                  ? "cardPulse 0.6s ease-out"
-                  : undefined,
+                pulsingId === agent.id ? "cardPulse 0.6s ease-out" : undefined,
             }}
             onMouseEnter={(e) => {
-              if (agent.active) {
+              if (agent.active)
                 (e.currentTarget as HTMLElement).style.boxShadow =
                   "0 0 16px 2px var(--accent-glow)";
-              }
             }}
             onMouseLeave={(e) => {
               (e.currentTarget as HTMLElement).style.boxShadow = "none";
@@ -192,10 +180,12 @@ export default function AgentSwarm() {
               }}
             >
               <span
-                className="w-1 h-1 rounded-full agent-pulse"
+                className="w-1 h-1 rounded-full"
                 style={{
                   background: "currentColor",
-                  animation: "blink 1.5s ease-in-out infinite",
+                  animation: agent.active
+                    ? "blink 1.5s ease-in-out infinite"
+                    : undefined,
                 }}
               />
               {agent.status}
