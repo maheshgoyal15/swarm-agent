@@ -11,19 +11,7 @@ import ImpactChart from "@/components/ImpactChart";
 import ChatPanel from "@/components/ChatPanel";
 import MemoryStats from "@/components/MemoryStats";
 import ActivityFeed from "@/components/ActivityFeed";
-
-interface CurrentDatabase {
-  host: string;
-  port: number;
-  database: string;
-  target_schema: string;
-  db_type: string;
-  display: string;
-}
-
-interface SwarmStatus {
-  cycle_id: number;
-}
+import { SwarmStatus, CurrentDatabase } from "@/lib/types";
 
 export default function Home() {
   const [scanning, setScanning] = useState(false);

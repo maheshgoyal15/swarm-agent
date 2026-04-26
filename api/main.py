@@ -54,8 +54,7 @@ app.include_router(swarm.router, prefix="/api/swarm", tags=["swarm"])
 app.include_router(discovery.router, prefix="/api", tags=["discovery"])
 app.include_router(recommendations.router, prefix="/api", tags=["recommendations"])
 app.include_router(agents.router, prefix="/api", tags=["agents"])
-app.include_router(metrics.router, prefix="/api/metrics", tags=["metrics"])
-app.include_router(metrics.router, prefix="/api", tags=["knowledge"])
+app.include_router(metrics.router, prefix="/api", tags=["metrics", "knowledge"])
 app.include_router(chat.router, prefix="/api", tags=["chat"])
 
 

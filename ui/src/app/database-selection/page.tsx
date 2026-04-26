@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { fetchJSON, postJSON } from "@/lib/api";
+import { CurrentDatabase } from "@/lib/types";
 
 interface RegisteredDatabase {
   db_id: number | null;
@@ -14,15 +15,6 @@ interface RegisteredDatabase {
   ip: string;
   status: string;
   created_at: string | null;
-}
-
-interface CurrentDatabase {
-  host: string;
-  port: number;
-  database: string;
-  target_schema: string;
-  db_type: string;
-  display: string;
 }
 
 export default function DatabaseSelectionPage() {

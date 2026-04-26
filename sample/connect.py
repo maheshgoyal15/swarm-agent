@@ -1,16 +1,17 @@
+import os
 import pg8000.native
 import sys
 
 def test_connection():
-    print("Attempting to connect to AlloyDB at 35.223.127.94:5432...")
+    print(f"Attempting to connect to {os.getenv('DB_HOST','localhost')}:{os.getenv('DB_PORT','5432')}...")
     try:
         conn = pg8000.native.Connection(
-            host="35.223.127.94",
-            port=5432,
-            database="postgres",
-            user="postgres",
-            password="Password"
-        )
+        host=os.getenv("DB_HOST", "localhost"),
+        port=int(os.getenv("DB_PORT", "5432")),
+        database=os.getenv("DB_NAME", "postgres"),
+        user=os.getenv("DB_USER", "postgres"),
+        password=os.getenv("DB_PASSWORD", ""),
+    )
         print("Connection successful!")
         
         print("Running sample query...")

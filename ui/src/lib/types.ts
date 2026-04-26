@@ -79,6 +79,17 @@ export interface SwarmStatus {
   cycle_id: number;
 }
 
+// ============== Current Database (from env-var connection) ==============
+export interface CurrentDatabase {
+  host: string;
+  port: number;
+  database: string;
+  user: string;
+  target_schema: string;
+  db_type: string;
+  display: string;
+}
+
 // ============== Knowledge Stats ==============
 export interface KnowledgeStats {
   decisions_logged: number;

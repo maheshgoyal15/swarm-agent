@@ -6,12 +6,12 @@ import json
 # Add parent directory to path to find agents package
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# Set API keys explicitly
-os.environ["GOOGLE_API_KEY"] = "AIzaSyAyC2HjTUKS7goHGlJNF3sKU7yRuMRQRqw"
+# API key must be set in the environment before running this script
+# e.g. export GOOGLE_API_KEY=your-key-here
 
 from agents.sage.agent import sage_agent
 from agents.forge.agent import forge_agent
-from agents.tools.alloydb_tools import save_recommendation, update_agent_status
+from agents.tools.alloydb_tools import save_recommendation, update_agent_status, get_target_schema
 from google.adk.agents.invocation_context import InvocationContext
 from google.adk.agents.run_config import RunConfig
 from google.adk.sessions import InMemorySessionService
@@ -30,7 +30,7 @@ async def run_custom_cycle():
     print("\n--- Running Sage (Analyzer) ---")
     update_agent_status("sage", "analyzing", "Starting analysis")
     
-    sage_content = Content(parts=[Part(text="Analyze the schema for perfagent_heavy and identify slow queries.")])
+    sage_content = Content(parts=[Part(text=f"Analyze the schema for {get_target_schema()} and identify slow queries.")])
     sage_context = InvocationContext(
         session_service=session_service,
         agent=sage_agent,

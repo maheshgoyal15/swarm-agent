@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Query
 from models.schemas import OptimizationScore, ImpactDataPoint, KnowledgeStats
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import random
 from agents.tools.alloydb_tools import get_connection
 
@@ -98,25 +98,27 @@ async def cost_savings(period: str = Query(default="30d")):
 async def impact_timeline(period: str = Query(default="30d")):
     # Generating synthetic data as approved
     days = int(period.replace("d", "")) if period.endswith("d") else 30
-    now = datetime.utcnow()
+    # Use timezone-aware now so it can be subtracted from pg8000 TIMESTAMPTZ datetimes
+    now = datetime.now(timezone.utc)
     data = []
-    
-    # We can check applied changes to mark them on the chart
+
     applied_days = []
     try:
         conn = get_connection()
         res = conn.run("SELECT applied_at FROM evo_state.applied_changes;")
         conn.close()
-        # Map applied dates to days ago
         for row in res:
             applied_at = row[0]
             if isinstance(applied_at, str):
-                applied_at = datetime.fromisoformat(applied_at.replace('Z', '+00:00'))
+                applied_at = datetime.fromisoformat(applied_at.replace("Z", "+00:00"))
+            # Ensure timezone-aware so subtraction doesn't raise TypeError
+            if applied_at.tzinfo is None:
+                applied_at = applied_at.replace(tzinfo=timezone.utc)
             days_ago = (now - applied_at).days
             if 0 <= days_ago < days:
                 applied_days.append(days - 1 - days_ago)
-    except:
-        applied_days = [5, 12, 20, 26] # Fallback
+    except Exception:
+        applied_days = []
 
     for i in range(days - 1, -1, -1):
         date = now - timedelta(days=i)

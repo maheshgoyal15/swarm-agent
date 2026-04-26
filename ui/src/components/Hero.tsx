@@ -2,20 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { fetchJSON } from "@/lib/api";
-
-interface SwarmStatus {
-  active: boolean;
-  agentCount: number;
-  cycle_id: number;
-}
-
-interface CurrentDatabase {
-  host: string;
-  port: number;
-  database: string;
-  target_schema: string;
-  db_type: string;
-}
+import { SwarmStatus, CurrentDatabase } from "@/lib/types";
 
 export default function Hero() {
   const [swarm, setSwarm] = useState<SwarmStatus | null>(null);
