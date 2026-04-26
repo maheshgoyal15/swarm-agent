@@ -63,9 +63,9 @@ async def list_databases(project_id: Optional[str] = None):
                 """SELECT db_id, project_id, instance_id, database_name, db_type,
                           target_schema, ip, created_at
                    FROM evo_state.monitored_databases
-                   WHERE project_id = $1
+                   WHERE project_id = :pid
                    ORDER BY created_at DESC;""",
-                (project_id,)
+                pid=project_id,
             )
         else:
             rows = conn.run(
@@ -119,17 +119,18 @@ async def select_database(selection: DatabaseSelection):
         query = """
         INSERT INTO evo_state.monitored_databases
             (project_id, instance_id, database_name, db_type, target_schema, ip)
-        VALUES ($1, $2, $3, $4, $5, $6)
+        VALUES (:p1, :p2, :p3, :p4, :p5, :p6)
         RETURNING db_id;
         """
-        result = conn.run(query, (
-            selection.project_id or "",
-            selection.instance_id,
-            selection.database_name,
-            selection.db_type,
-            selection.target_schema or "public",
-            selection.ip or "",
-        ))
+        result = conn.run(
+            query,
+            p1=selection.project_id or "",
+            p2=selection.instance_id,
+            p3=selection.database_name,
+            p4=selection.db_type,
+            p5=selection.target_schema or "public",
+            p6=selection.ip or "",
+        )
         conn.close()
         return {"status": "success", "db_id": result[0][0]}
     except Exception as e:

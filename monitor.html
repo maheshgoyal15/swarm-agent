@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EvoAgent Monitor — mock-postgres</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0d1117; color: #e6edf3; font-family: 'Segoe UI', system-ui, sans-serif; padding: 24px; }
+  h1 { font-size: 1.5rem; color: #58a6ff; margin-bottom: 4px; }
+  .subtitle { color: #8b949e; font-size: 0.85rem; margin-bottom: 24px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin-bottom: 16px; }
+  .card { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 16px; }
+  .card h2 { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.1em; color: #8b949e; margin-bottom: 14px; }
+  .stat { font-size: 2.2rem; font-weight: 700; color: #58a6ff; }
+  .stat-label { font-size: 0.78rem; color: #8b949e; margin-top: 2px; }
+  .badge { display: inline-block; padding: 2px 9px; border-radius: 12px; font-size: 0.72rem; font-weight: 600; }
+  .badge-idle { background: #21262d; color: #6e7681; }
+  .badge-active { background: #1f6feb33; color: #58a6ff; border: 1px solid #1f6feb66; }
+  .badge-analyzing { background: #9e6a0333; color: #d29922; border: 1px solid #9e6a0366; }
+  .badge-planning { background: #23863633; color: #3fb950; border: 1px solid #23863666; }
+  .badge-thinking { background: #8957e533; color: #bc8cff; border: 1px solid #8957e566; }
+  .agent-row { display: flex; align-items: center; justify-content: space-between; padding: 7px 0; border-bottom: 1px solid #21262d; }
+  .agent-row:last-child { border-bottom: none; }
+  .agent-name { font-size: 0.85rem; font-weight: 600; color: #c9d1d9; min-width: 80px; }
+  .agent-task { font-size: 0.72rem; color: #8b949e; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pulse { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 8px; flex-shrink: 0; }
+  .pulse-on  { background: #3fb950; animation: blink 1.4s infinite; }
+  .pulse-off { background: #30363d; }
+  @keyframes blink { 0%,100%{opacity:1}50%{opacity:.25} }
+  table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+  th { text-align: left; padding: 6px 8px; color: #8b949e; border-bottom: 1px solid #30363d; font-weight: 600; white-space: nowrap; }
+  td { padding: 6px 8px; border-bottom: 1px solid #21262d; color: #c9d1d9; vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+  .mono { font-family: monospace; color: #79c0ff; max-width: 420px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; }
+  .sev-high { color: #f85149; }
+  .sev-medium { color: #d29922; }
+  .sev-low { color: #3fb950; }
+  .scan-btn { background: #238636; color: #fff; border: none; padding: 9px 18px; border-radius: 6px; font-size: 0.82rem; font-weight: 600; cursor: pointer; margin-top: 14px; width: 100%; }
+  .scan-btn:hover { background: #2ea043; }
+  .scan-btn:disabled { background: #21262d; color: #484f58; cursor: not-allowed; }
+  .toast { position: fixed; bottom: 24px; right: 24px; padding: 12px 20px; border-radius: 8px; font-size: 0.85rem; display: none; z-index: 99; }
+  .updated { font-size: 0.7rem; color: #484f58; margin-top: 16px; text-align: right; }
+  .empty { color: #484f58; font-size: 0.82rem; }
+  .rec-row { padding: 9px 0; border-bottom: 1px solid #21262d; }
+  .rec-row:last-child { border-bottom: none; }
+  .rec-title { font-size: 0.84rem; font-weight: 600; color: #c9d1d9; margin-bottom: 3px; }
+  .rec-detail { font-size: 0.72rem; color: #8b949e; }
+  .full { grid-column: 1 / -1; }
+</style>
+</head>
+<body>
+
+<h1>EvoAgent Monitor</h1>
+<p class="subtitle">mock-postgres &nbsp;·&nbsp; localhost:5432/postgres &nbsp;·&nbsp; public schema &nbsp;·&nbsp; 10,000 rows</p>
+
+<div class="grid">
+  <!-- Swarm -->
+  <div class="card">
+    <h2>Swarm</h2>
+    <div style="display:flex;align-items:center;margin-bottom:14px">
+      <span class="pulse pulse-off" id="pulse"></span>
+      <span id="swarm-label" style="font-size:0.95rem;font-weight:600">—</span>
+    </div>
+    <div class="stat" id="cycle-id">—</div>
+    <div class="stat-label">Latest Cycle</div>
+    <div id="cycle-status" style="font-size:0.75rem;color:#8b949e;margin-top:2px">—</div>
+    <button class="scan-btn" id="scan-btn" onclick="triggerScan()">▶ Trigger Scan</button>
+  </div>
+
+  <!-- mock_orders stats -->
+  <div class="card">
+    <h2>mock_orders</h2>
+    <div id="table-stats"><span class="empty">Loading…</span></div>
+  </div>
+
+  <!-- Agents -->
+  <div class="card">
+    <h2>Agent Status</h2>
+    <div id="agents"><span class="empty">Loading…</span></div>
+  </div>
+</div>
+
+<!-- Slow queries — full width -->
+<div class="card full" style="margin-bottom:16px">
+  <h2>Slow Queries — pg_stat_statements (top 10 by total time)</h2>
+  <div id="slow-queries"><span class="empty">Run the load generator, then check back.</span></div>
+</div>
+
+<!-- Recommendations — full width -->
+<div class="card full" style="margin-bottom:16px">
+  <h2>Pending Recommendations</h2>
+  <div id="recommendations"><span class="empty">Trigger a scan to generate recommendations.</span></div>
+</div>
+
+<div class="updated" id="updated"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+const API = 'http://localhost:8000/api';
+let scanning = false;
+
+function toast(msg, color = '#238636') {
+  const el = document.getElementById('toast');
+  el.style.background = color;
+  el.style.color = '#fff';
+  el.textContent = msg;
+  el.style.display = 'block';
+  setTimeout(() => el.style.display = 'none', 3500);
+}
+
+function badgeCls(s) {
+  if (!s || s === 'idle') return 'badge-idle';
+  if (s === 'analyzing') return 'badge-analyzing';
+  if (s === 'planning') return 'badge-planning';
+  if (s === 'thinking') return 'badge-thinking';
+  return 'badge-active';
+}
+
+function sevCls(s) {
+  if (s === 'high') return 'sev-high';
+  if (s === 'medium') return 'sev-medium';
+  return 'sev-low';
+}
+
+function fmt(n) { return Number(n).toLocaleString(); }
+function fmtMs(ms) { return ms >= 1000 ? (ms/1000).toFixed(1)+'s' : ms.toFixed(0)+'ms'; }
+function fmtBytes(b) {
+  if (b >= 1073741824) return (b/1073741824).toFixed(2)+' GB';
+  if (b >= 1048576) return (b/1048576).toFixed(2)+' MB';
+  if (b >= 1024) return (b/1024).toFixed(1)+' KB';
+  return b+' B';
+}
+
+async function refresh() {
+  let data;
+  try {
+    const r = await fetch(`${API}/dashboard`);
+    data = await r.json();
+  } catch(e) {
+    document.getElementById('updated').textContent = 'Error: ' + e.message;
+    return;
+  }
+
+  // Swarm
+  const active = data.swarm_active;
+  document.getElementById('pulse').className = 'pulse ' + (active ? 'pulse-on' : 'pulse-off');
+  document.getElementById('swarm-label').textContent = active ? 'Running' : 'Idle';
+  document.getElementById('cycle-id').textContent = data.cycle_id || '—';
+  document.getElementById('cycle-status').textContent = data.cycle_status || '';
+  if (!active) {
+    document.getElementById('scan-btn').disabled = false;
+    scanning = false;
+  }
+
+  // Table stats — find mock_orders
+  const ts = data.table_stats || [];
+  const mo = ts.find(t => t.table === 'mock_orders');
+  if (mo) {
+    document.getElementById('table-stats').innerHTML = `
+      <div class="stat">${fmt(mo.live_rows)}</div>
+      <div class="stat-label">Live Rows</div>
+      <div style="margin-top:12px;font-size:0.82rem">
+        <div style="color:#8b949e;margin-bottom:4px">Total size: <span style="color:#c9d1d9">${fmtBytes(mo.size_bytes)}</span></div>
+        <div style="color:#8b949e">Dead rows: <span style="color:#c9d1d9">${fmt(mo.dead_rows)}</span></div>
+      </div>
+      ${ts.length > 1 ? `<div style="margin-top:10px;font-size:0.72rem;color:#484f58">${ts.length} tables monitored</div>` : ''}
+    `;
+  } else {
+    document.getElementById('table-stats').innerHTML = '<span class="empty">mock_orders not visible yet</span>';
+  }
+
+  // Agents
+  const agents = data.agents || [];
+  if (!agents.length) {
+    document.getElementById('agents').innerHTML = '<span class="empty">No agents</span>';
+  } else {
+    document.getElementById('agents').innerHTML = agents.map(a => `
+      <div class="agent-row">
+        <div>
+          <div class="agent-name">${a.codename}</div>
+          <div class="agent-task">${a.task || '—'}</div>
+        </div>
+        <span class="badge ${badgeCls(a.status)}">${a.status}</span>
+      </div>`).join('');
+  }
+
+  // Slow queries
+  const sq = data.slow_queries || [];
+  if (!sq.length) {
+    document.getElementById('slow-queries').innerHTML = '<span class="empty">No data yet — run the load generator first:<br><code style="color:#79c0ff">python3 sample/load_gen.py --duration 120 --workers 4</code></span>';
+  } else {
+    const rows = sq.map(q => `<tr>
+      <td><span class="mono" title="${escHtml(q.query)}">${escHtml((q.query||'').replace(/\s+/g,' ').slice(0,90))}</span></td>
+      <td>${fmt(q.calls)}</td>
+      <td>${fmtMs(q.total_ms)}</td>
+      <td>${fmtMs(q.avg_ms)}</td>
+    </tr>`).join('');
+    document.getElementById('slow-queries').innerHTML = `
+      <table><thead><tr><th>Query</th><th>Calls</th><th>Total</th><th>Avg</th></tr></thead>
+      <tbody>${rows}</tbody></table>`;
+  }
+
+  // Recommendations
+  const recs = data.recommendations || [];
+  if (!recs.length) {
+    document.getElementById('recommendations').innerHTML = '<span class="empty">No pending recommendations — trigger a scan above.</span>';
+  } else {
+    document.getElementById('recommendations').innerHTML = recs.map(r => `
+      <div class="rec-row">
+        <div class="rec-title">
+          ${escHtml(r.target)} &nbsp;<span class="${sevCls(r.severity)}" style="font-size:0.72rem">[${r.severity}]</span>
+          &nbsp;<span style="color:#484f58;font-size:0.72rem">${r.type || ''}</span>
+        </div>
+        <div class="rec-detail">${escHtml((r.rationale||'').slice(0,200))}</div>
+      </div>`).join('');
+  }
+
+  document.getElementById('updated').textContent = 'Last refreshed: ' + new Date().toLocaleTimeString();
+}
+
+function escHtml(s) {
+  return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+async function triggerScan() {
+  if (scanning) return;
+  scanning = true;
+  document.getElementById('scan-btn').disabled = true;
+  try {
+    const r = await fetch(`${API}/scan`, { method: 'POST' });
+    const d = await r.json();
+    toast(`Scan started — cycle #${d.cycle_id}`);
+  } catch(e) {
+    toast('Scan failed: ' + e.message, '#f85149');
+    scanning = false;
+    document.getElementById('scan-btn').disabled = false;
+  }
+}
+
+refresh();
+setInterval(refresh, 4000);
+</script>
+</body>
+</html>

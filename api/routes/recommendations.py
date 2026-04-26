@@ -2,7 +2,6 @@ import os
 from fastapi import APIRouter, HTTPException, BackgroundTasks
 from models.schemas import Recommendation, ApplyResult, RejectResult, Impact
 from agents.tools.alloydb_tools import get_connection, get_target_schema
-from agents.runner import run_agent_cycle
 
 router = APIRouter()
 
@@ -127,6 +126,7 @@ async def trigger_scan(background_tasks: BackgroundTasks):
             f"Identify the top performance and cost optimization opportunities based on slow queries, "
             f"table sizes, and index usage. Generate specific SQL recommendations and save each one."
         )
+        from agents.runner import run_agent_cycle
         background_tasks.add_task(run_agent_cycle, prompt, cycle_id)
 
         return {

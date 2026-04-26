@@ -56,10 +56,10 @@ def read_schema() -> str:
         query = """
         SELECT table_name, column_name, data_type
         FROM information_schema.columns
-        WHERE table_schema = $1
+        WHERE table_schema = :s
         ORDER BY table_name, ordinal_position;
         """
-        rows = conn.run(query, (schema_name,))
+        rows = conn.run(query, s=schema_name)
 
         schema = {"tables": {}, "schema": schema_name}
         for row in rows:
@@ -139,9 +139,9 @@ def get_table_stats() -> str:
                n_live_tup as row_count,
                pg_total_relation_size(relid) as total_size_bytes
         FROM pg_stat_user_tables
-        WHERE schemaname = $1;
+        WHERE schemaname = :s;
         """
-        rows = conn.run(query, (schema_name,))
+        rows = conn.run(query, s=schema_name)
         conn.close()
         return json.dumps(rows, indent=2, default=str)
     except Exception as e:
@@ -212,10 +212,10 @@ def save_recommendation(target_resource: str, rec_type: str, severity: str, rati
         conn = get_connection()
         query = """
         INSERT INTO evo_state.recommendations (target_resource, recommendation_type, severity, rationale, generated_sql, status)
-        VALUES ($1, $2, $3, $4, $5, 'pending')
+        VALUES (:tr, :rt, :sv, :ra, :sq, 'pending')
         RETURNING rec_id;
         """
-        result = conn.run(query, (target_resource, rec_type, severity, rationale, sql))
+        result = conn.run(query, tr=target_resource, rt=rec_type, sv=severity, ra=rationale, sq=sql)
         conn.close()
         return json.dumps({"status": "success", "rec_id": str(result[0][0])})
     except Exception as e:

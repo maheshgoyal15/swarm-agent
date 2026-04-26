@@ -49,7 +49,7 @@ app = FastAPI(title="EvoAgent API", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -66,3 +66,72 @@ app.include_router(chat.router, prefix="/api", tags=["chat"])
 @app.get("/api/health")
 async def health_check():
     return {"status": "ok"}
+
+
+@app.get("/api/dashboard")
+async def dashboard():
+    """Single endpoint that aggregates all monitor data to avoid CORS/multi-fetch issues."""
+    from agents.tools.alloydb_tools import get_connection, get_target_schema
+    import json as _json
+
+    result = {
+        "agents": [],
+        "table_stats": [],
+        "slow_queries": [],
+        "cycle_id": 0,
+        "swarm_active": False,
+        "recommendations": [],
+    }
+    try:
+        conn = get_connection()
+
+        # Agent status
+        rows = conn.run("SELECT agent_codename, status, task, updated_at FROM evo_state.agent_status ORDER BY agent_codename;")
+        result["agents"] = [{"codename": r[0], "status": r[1], "task": r[2], "updated_at": str(r[3])} for r in rows]
+
+        # Active agents count
+        active = sum(1 for a in result["agents"] if a["status"] != "idle")
+        result["swarm_active"] = active > 0
+
+        # Latest cycle
+        cy = conn.run("SELECT cycle_id, status, started_at FROM evo_state.evo_cycles ORDER BY cycle_id DESC LIMIT 1;")
+        if cy:
+            result["cycle_id"] = cy[0][0]
+            result["cycle_status"] = cy[0][1]
+
+        # Table stats — look for mock_orders specifically + all tables
+        schema = get_target_schema()
+        ts = conn.run(
+            "SELECT relname, n_live_tup, pg_total_relation_size(relid), n_dead_tup "
+            "FROM pg_stat_user_tables WHERE schemaname = :s ORDER BY pg_total_relation_size(relid) DESC;",
+            s=schema,
+        )
+        result["table_stats"] = [{"table": r[0], "live_rows": r[1], "size_bytes": r[2], "dead_rows": r[3]} for r in ts]
+
+        # Slow queries from pg_stat_statements
+        try:
+            sq = conn.run(
+                "SELECT query, calls, total_exec_time, mean_exec_time "
+                "FROM pg_stat_statements "
+                "WHERE query NOT LIKE '%pg_%' AND query NOT LIKE '%evo_state%' "
+                "ORDER BY total_exec_time DESC LIMIT 10;"
+            )
+            result["slow_queries"] = [{"query": r[0], "calls": r[1], "total_ms": float(r[2]), "avg_ms": float(r[3])} for r in sq]
+        except Exception:
+            result["slow_queries"] = []
+
+        # Pending recommendations
+        recs = conn.run(
+            "SELECT rec_id, target_resource, recommendation_type, severity, rationale, status, created_at "
+            "FROM evo_state.recommendations WHERE status = 'pending' ORDER BY created_at DESC LIMIT 10;"
+        )
+        result["recommendations"] = [
+            {"id": str(r[0]), "target": r[1], "type": r[2], "severity": r[3], "rationale": r[4], "status": r[5]}
+            for r in recs
+        ]
+
+        conn.close()
+    except Exception as e:
+        result["error"] = str(e)
+
+    return result

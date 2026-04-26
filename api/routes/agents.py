@@ -29,10 +29,11 @@ async def list_agents():
         conn = get_connection()
         # Only fetch the 5 known display agents; coordinator is internal
         codenames = list(AGENT_PROPERTIES.keys())
-        placeholders = ", ".join(f"${i+1}" for i in range(len(codenames)))
+        named = {f"c{i}": c for i, c in enumerate(codenames)}
+        placeholders = ", ".join(f":{k}" for k in named)
         rows = conn.run(
             f"SELECT agent_codename, status, task FROM evo_state.agent_status WHERE agent_codename IN ({placeholders});",
-            tuple(codenames),
+            **named,
         )
         conn.close()
 
