@@ -7,6 +7,28 @@ from agents.tools.alloydb_tools import save_recommendation
 
 MODEL = "gemini-2.5-pro"
 
+# Monkey patch to use Vertex AI
+try:
+    import google.genai
+    import os
+    from dotenv import load_dotenv
+    load_dotenv(os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env"))
+    
+    original_Client = google.genai.Client
+    
+    def mocked_Client(**kwargs):
+        print("[Monkey Patch] Creating Client with Vertex AI enabled")
+        kwargs['vertexai'] = True
+        kwargs['project'] = os.getenv("GCP_PROJECT", "my-sample-project-01-338917")
+        kwargs['location'] = os.getenv("GCP_LOCATION", "us-central1")
+        kwargs.pop('api_key', None)
+        return original_Client(**kwargs)
+        
+    google.genai.Client = mocked_Client
+    print("[Monkey Patch] Successfully patched google.genai.Client")
+except Exception as e:
+    print(f"[Monkey Patch] Failed to patch: {e}")
+
 COORDINATOR_PROMPT = """
 You are the Coordinator of the EvoAgent swarm.
 Your job is to orchestrate the optimization process.

@@ -21,18 +21,24 @@ def get_target_schema() -> str:
 def update_agent_status(agent_codename: str, status: str, task: str):
     """Updates the status of an agent in the database."""
     try:
+        status_clean = status.replace("'", "''")
+        task_clean = task.replace("'", "''")
+        codename_clean = agent_codename.replace("'", "''")
+        
         conn = get_connection()
-        query = """
-        UPDATE evo_state.agent_status
-        SET status = $1, task = $2, updated_at = NOW()
-        WHERE agent_codename = $3
+        query = f"""
+        UPDATE evo_state.agent_status 
+        SET status = '{status_clean}', task = '{task_clean}', updated_at = NOW() 
+        WHERE agent_codename = '{codename_clean}'
         RETURNING agent_codename;
         """
-        res = conn.run(query, [status, task, agent_codename])
+        res = conn.run(query)
         print(f"[DB Tool] Status updated for {agent_codename}. Result: {res}")
         conn.close()
     except Exception as e:
-        print(f"Error updating agent status: {e}", file=sys.stderr)
+        print(f"Error updating agent status for {agent_codename}: {e}", file=sys.stderr)
+        import traceback
+        traceback.print_exc(file=sys.stderr)
 
 
 def read_schema() -> str:

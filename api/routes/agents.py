@@ -32,7 +32,7 @@ async def list_agents():
         placeholders = ", ".join(f"${i+1}" for i in range(len(codenames)))
         rows = conn.run(
             f"SELECT agent_codename, status, task FROM evo_state.agent_status WHERE agent_codename IN ({placeholders});",
-            codenames,
+            tuple(codenames),
         )
         conn.close()
 
