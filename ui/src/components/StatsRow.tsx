@@ -1,9 +1,51 @@
 "use client";
 
-import { mockOptimizationScore } from "@/lib/mock-data";
+import { useState, useEffect, useCallback } from "react";
+import { fetchJSON } from "@/lib/api";
+
+interface OptimizationScoreData {
+  score: number;
+  grade: string;
+  trend: string;
+  description: string;
+  cost_saved: number;
+  cost_trend: string;
+  speedup: number;
+  speedup_trend: string;
+  pending: number;
+  pending_high: number;
+}
 
 export default function StatsRow() {
-  const data = mockOptimizationScore;
+  const [data, setData] = useState<OptimizationScoreData | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+
+  const loadStats = useCallback(async () => {
+    try {
+      const result = await fetchJSON<OptimizationScoreData>("/metrics/optimization-score");
+      setData(result);
+    } catch (err) {
+      console.error("Failed to load stats:", err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadStats();
+    const interval = setInterval(loadStats, 10000);
+    return () => clearInterval(interval);
+  }, [loadStats]);
+
+  if (loading && !data) {
+    return (
+      <div className="p-6 text-center bg-[#131927] border border-white/5 rounded-xl">
+        <p style={{ color: "var(--text-muted)" }}>Loading stats...</p>
+      </div>
+    );
+  }
+
+  if (!data) return null;
 
   return (
     <section
@@ -122,7 +164,7 @@ export default function StatsRow() {
       {/* Avg Query Speedup */}
       <StatCard
         label="Avg Query Speedup"
-        value={data.speedup.toString()}
+        value={data.speedup.toFixed(1)}
         unit="×"
         trend={data.speedup_trend}
         trendColor="var(--accent)"

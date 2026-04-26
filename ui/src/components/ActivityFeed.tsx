@@ -1,4 +1,4 @@
-"use client";
+L"use client";
 
 import { useState, useEffect } from "react";
 import { mockActivityEvents } from "@/lib/mock-data";
@@ -19,7 +19,7 @@ export default function ActivityFeed() {
           const data = JSON.parse(event.data);
           if (data.ts && data.agent) {
             const newEvent: ActivityEvent = {
-              id: `act-${Date.now()}`,
+              id: `act-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
               timestamp: data.ts,
               agent: data.agent.toUpperCase(),
               content: data.details || data.action,

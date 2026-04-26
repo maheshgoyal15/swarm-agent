@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import confetti from "canvas-confetti";
-import { mockRecommendations } from "@/lib/mock-data";
 import { Recommendation } from "@/lib/types";
+import { fetchJSON } from "@/lib/api";
 
 function highlightSQL(sql: string): string {
   const keywords = [
@@ -67,8 +67,28 @@ const iconSymbols: Record<string, string> = {
 };
 
 export default function RecommendationsFeed() {
-  const [recs, setRecs] = useState<Recommendation[]>(mockRecommendations);
+  const [recs, setRecs] = useState<Recommendation[]>([]);
   const [applyingId, setApplyingId] = useState<string | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+
+  const loadRecommendations = useCallback(async () => {
+    try {
+      const data = await fetchJSON<Recommendation[]>("/recommendations");
+      setRecs(data);
+    } catch (err) {
+      console.error("Failed to load recommendations:", err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadRecommendations();
+    
+    // Auto-refresh every 10 seconds
+    const interval = setInterval(loadRecommendations, 10000);
+    return () => clearInterval(interval);
+  }, [loadRecommendations]);
 
   const handleApply = useCallback(
     async (id: string, e: React.MouseEvent<HTMLButtonElement>) => {
@@ -113,8 +133,26 @@ export default function RecommendationsFeed() {
   );
 
   const handleReject = useCallback(async (id: string) => {
-    setRecs((prev) => prev.filter((r) => r.id !== id));
+    try {
+      await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api"}/recommendations/${id}/reject`,
+        { method: "POST" }
+      );
+      setRecs((prev) => prev.filter((r) => r.id !== id));
+    } catch (err) {
+      console.error("Failed to reject:", err);
+      // Still remove optimistically
+      setRecs((prev) => prev.filter((r) => r.id !== id));
+    }
   }, []);
+
+  if (loading && recs.length === 0) {
+    return (
+      <div className="px-6 py-16 text-center">
+        <p style={{ color: "var(--text-muted)" }}>Loading recommendations...</p>
+      </div>
+    );
+  }
 
   if (recs.length === 0) {
     return (

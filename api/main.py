@@ -1,6 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from routes import recommendations, agents, metrics, chat, swarm
+from routes import recommendations, agents, metrics, chat, swarm, discovery
+import logging
+logging.basicConfig(level=logging.DEBUG)
 
 app = FastAPI(title="EvoAgent API")
 
@@ -15,6 +17,7 @@ app.add_middleware(
 
 # Mount routes
 app.include_router(swarm.router, prefix="/api/swarm", tags=["swarm"])
+app.include_router(discovery.router, prefix="/api", tags=["discovery"])
 app.include_router(recommendations.router, prefix="/api", tags=["recommendations"])
 app.include_router(agents.router, prefix="/api", tags=["agents"])
 app.include_router(metrics.router, prefix="/api/metrics", tags=["metrics"])

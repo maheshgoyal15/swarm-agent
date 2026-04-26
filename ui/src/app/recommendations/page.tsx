@@ -1,4 +1,5 @@
 import Topbar from "@/components/Topbar";
+import Link from "next/link";
 import RecommendationsFeed from "@/components/RecommendationsFeed";
 import { AlertCircle } from "lucide-react";
 
@@ -12,6 +13,11 @@ export default function RecommendationsPage() {
         style={{ maxWidth: "1200px" }}
       >
         <div className="mb-8">
+          <div className="mb-4">
+            <Link href="/" className="text-[13px] hover:underline" style={{ color: "var(--accent)", fontFamily: "var(--font-mono)" }}>
+              ← Back to Overview
+            </Link>
+          </div>
           <h1
             className="text-[42px] leading-none tracking-tight mb-3"
             style={{ fontFamily: "var(--font-display)" }}

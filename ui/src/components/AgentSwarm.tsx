@@ -3,10 +3,25 @@
 import { useState, useEffect, useCallback } from "react";
 import { mockAgents } from "@/lib/mock-data";
 import { Agent } from "@/lib/types";
+import { fetchJSON } from "@/lib/api";
 
 export default function AgentSwarm() {
   const [agents, setAgents] = useState<Agent[]>(mockAgents);
   const [pulsingId, setPulsingId] = useState<number | null>(null);
+  const [fallbackPolling, setFallbackPolling] = useState<boolean>(false);
+
+  // Fetch initial data
+  useEffect(() => {
+    async function loadAgents() {
+      try {
+        const data = await fetchJSON<Agent[]>("/agents");
+        setAgents(data);
+      } catch (err) {
+        console.error("Failed to load agents:", err);
+      }
+    }
+    loadAgents();
+  }, []);
 
   // SSE connection for agent updates
   useEffect(() => {
@@ -40,14 +55,33 @@ export default function AgentSwarm() {
         }
       };
       es.onerror = () => {
-        // SSE connection failed, keep mock data
+        console.warn("SSE failed in AgentSwarm, falling back to polling.");
         es?.close();
+        setFallbackPolling(true);
       };
     } catch {
-      // EventSource not available or failed
+      console.warn("EventSource not available, falling back to polling.");
+      setFallbackPolling(true);
     }
     return () => es?.close();
   }, []);
+
+  // Fallback polling effect
+  useEffect(() => {
+    if (!fallbackPolling) return;
+    
+    console.log("Starting fallback polling in AgentSwarm...");
+    const interval = setInterval(async () => {
+      try {
+        const data = await fetchJSON<Agent[]>("/agents");
+        setAgents(data);
+      } catch (err) {
+        console.error("Polling failed in AgentSwarm:", err);
+      }
+    }, 3000); // Poll every 3 seconds
+    
+    return () => clearInterval(interval);
+  }, [fallbackPolling]);
 
   return (
     <section
