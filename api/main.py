@@ -10,8 +10,26 @@ import os
 # Load environment variables from agents/.env
 load_dotenv("../agents/.env")
 
-logging.basicConfig(level=logging.DEBUG)
-logger = logging.getLogger(__name__)
+from logging.handlers import TimedRotatingFileHandler
+
+log_dir = "../logs"
+os.makedirs(log_dir, exist_ok=True)
+
+log_handler = TimedRotatingFileHandler(
+    os.path.join(log_dir, "api.log"),
+    when="D",
+    interval=1,
+    backupCount=7
+)
+log_handler.setLevel(logging.DEBUG)
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+log_handler.setFormatter(formatter)
+
+logger = logging.getLogger()
+logger.addHandler(log_handler)
+logger.setLevel(logging.DEBUG)
+
+logger.info("API logger initialized with daily rotation.")
 
 
 def init_db():
@@ -46,6 +64,36 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="EvoAgent API", lifespan=lifespan)
+
+from pydantic import BaseModel
+import json
+
+class LogMessage(BaseModel):
+    level: str
+    message: str
+    data: dict = None
+
+@app.post("/api/log")
+async def log_from_frontend(msg: LogMessage):
+    level = msg.level.upper()
+    message = f"[UI] {msg.message}"
+    if msg.data:
+        message += f" | Data: {json.dumps(msg.data)}"
+        
+    if level == "DEBUG":
+        logger.debug(message)
+    elif level == "INFO":
+        logger.info(message)
+    elif level == "WARNING":
+        logger.warning(message)
+    elif level == "ERROR":
+        logger.error(message)
+    elif level == "CRITICAL":
+        logger.critical(message)
+    else:
+        logger.info(message)
+        
+    return {"status": "logged"}
 
 app.add_middleware(
     CORSMiddleware,

@@ -3,12 +3,38 @@ import os
 import sys
 from uuid import uuid4
 
+# Remove API keys from environment to force Vertex AI (ADC)
+os.environ.pop("GOOGLE_API_KEY", None)
+os.environ.pop("GEMINI_API_KEY", None)
+
 # Add parent directory to path to find agents package
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Load environment variables from agents/.env
 from dotenv import load_dotenv
 load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
+
+import logging
+from logging.handlers import TimedRotatingFileHandler
+
+log_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "logs")
+os.makedirs(log_dir, exist_ok=True)
+
+log_handler = TimedRotatingFileHandler(
+    os.path.join(log_dir, "agents.log"),
+    when="D",
+    interval=1,
+    backupCount=7
+)
+log_handler.setLevel(logging.DEBUG)
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+log_handler.setFormatter(formatter)
+
+logger = logging.getLogger("agents")
+logger.addHandler(log_handler)
+logger.setLevel(logging.DEBUG)
+
+logger.info("Agents logger initialized with daily rotation.")
 
 # Monkey patch google.adk.models.google_llm to use Vertex AI
 try:
@@ -51,7 +77,7 @@ async def run_agent_cycle(user_input: str, cycle_id: int = None) -> str:
     """
     print(f"Starting agent cycle with input: {user_input}, cycle_id: {cycle_id}")
     
-    update_agent_status("coordinator", "thinking", "Starting cycle...")
+    update_agent_status("sage", "analyzing", "Thinking...")
     
     session_service = InMemorySessionService()
     session = await session_service.create_session(
@@ -87,7 +113,7 @@ async def run_agent_cycle(user_input: str, cycle_id: int = None) -> str:
         if cycle_id:
             try:
                 conn = get_connection()
-                conn.run("UPDATE evo_state.evo_cycles SET status = 'succeeded', ended_at = NOW() WHERE cycle_id = $1;", [cycle_id])
+                conn.run("UPDATE evo_state.evo_cycles SET status = 'succeeded', ended_at = NOW() WHERE cycle_id = $1;", [None, cycle_id])
                 conn.close()
             except Exception as e:
                 print(f"Failed to update cycle status: {e}")
@@ -99,7 +125,7 @@ async def run_agent_cycle(user_input: str, cycle_id: int = None) -> str:
         if cycle_id:
             try:
                 conn = get_connection()
-                conn.run("UPDATE evo_state.evo_cycles SET status = 'failed', ended_at = NOW() WHERE cycle_id = $1;", [cycle_id])
+                conn.run("UPDATE evo_state.evo_cycles SET status = 'failed', ended_at = NOW() WHERE cycle_id = $1;", [None, cycle_id])
                 conn.close()
             except Exception as e2:
                 print(f"Failed to update cycle status on error: {e2}")

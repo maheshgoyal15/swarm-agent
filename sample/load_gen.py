@@ -11,10 +11,17 @@ import argparse
 import threading
 import pg8000.native
 from datetime import datetime
+from dotenv import load_dotenv
+
+# Load environment variables from agents/.env
+load_dotenv(os.path.join(os.path.dirname(os.path.dirname(__file__)), "agents/.env"))
 
 DB = dict(
-    host="localhost", port=5432, database="postgres",
-    user="postgres", password="postgres"
+    host=os.getenv("DB_HOST", "localhost"),
+    port=int(os.getenv("DB_PORT", "5432")),
+    database=os.getenv("DB_NAME", "postgres"),
+    user=os.getenv("DB_USER", "postgres"),
+    password=os.getenv("DB_PASSWORD", "postgres")
 )
 
 STATUSES = ["pending", "shipped", "cancelled"]

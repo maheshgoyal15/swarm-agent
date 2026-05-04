@@ -3,11 +3,33 @@ import sys
 import os
 import json
 
-# Add parent directory to path to find agents package
+# Remove API keys from environment to force Vertex AI (ADC)
+os.environ.pop("GOOGLE_API_KEY", None)
+os.environ.pop("GEMINI_API_KEY", None)
+
+import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# API key must be set in the environment before running this script
-# e.g. export GOOGLE_API_KEY=your-key-here
+from dotenv import load_dotenv
+load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
+
+# Monkey patch to use Vertex AI
+try:
+    import google.genai
+    original_Client = google.genai.Client
+    
+    def mocked_Client(**kwargs):
+        print("[Monkey Patch] Creating Client with Vertex AI enabled")
+        kwargs['vertexai'] = True
+        kwargs['project'] = os.getenv("GCP_PROJECT", "my-sample-project-01-338917")
+        kwargs['location'] = os.getenv("GCP_LOCATION", "us-central1")
+        kwargs.pop('api_key', None)
+        return original_Client(**kwargs)
+        
+    google.genai.Client = mocked_Client
+    print("[Monkey Patch] Successfully patched google.genai.Client")
+except Exception as e:
+    print(f"[Monkey Patch] Failed to patch: {e}")
 
 from agents.sage.agent import sage_agent
 from agents.forge.agent import forge_agent
